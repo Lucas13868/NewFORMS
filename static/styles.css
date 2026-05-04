@@ -10,7 +10,7 @@
     padding: 10px 20px;
 }
 
-.form-title {
+#file-title {
     max-width: 200px;
     height:50px;
     overflow: auto;

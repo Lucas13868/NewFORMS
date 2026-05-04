@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect, request, flash, url_for, session
+from flask import Flask, render_template, redirect, request, flash, url_for, session, jsonify
 from flask_bcrypt import Bcrypt
 from dotenv import load_dotenv
 import sqlite3
@@ -196,6 +196,16 @@ def edit_form(form_id):
         return redirect("/")
 
     return render_template("form_template.html", form=form)
+
+@app.route("/api/save-changes", methods=['POST'])
+@login_required
+def save_changes():
+    data = request.get_json()
+
+    print(data)
+
+    return jsonify({"mensagem": "Mudanças efetuadas (a implementar!)"})
+    
 
 
 
