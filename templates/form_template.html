@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+
+<html lang="en">
+    <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
+        <link href="/static/styles.css" rel="stylesheet">
+        <script src="/static/script.js" defer></script>
+
+        <title>My form</title>
+    </head>
+    <body>
+        <nav class="navbar navbar-expand-lg bg-body-tertiary">
+            <div class="container-fluid">
+                <div class="d-flex">
+                    <a class="navbar-brand" href="/">NewFORMS</a>
+                    <div class="form-title" contenteditable="true" >{{ form[1] }}</div>
+                </div>             
+                
+                <button id="save-button">Save</button>
+            </div>
+        </nav>
+    </body>
+</html>

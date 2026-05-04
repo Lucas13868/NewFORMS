@@ -1,0 +1,11 @@
+{
+    "sqltools.connections": [
+        {
+            "previewLimit": 50,
+            "driver": "SQLite",
+            "name": "Forms Database",
+            "database": "D:\\My Projects\\database.db"
+        }
+    ],
+    "sqltools.useNodeRuntime": true
+}
