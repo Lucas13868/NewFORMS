@@ -176,7 +176,7 @@ def delete_form():
         cursor.execute("DELETE FROM forms WHERE id = ? AND user_id = ?", (form_id, user_id))
         connect.commit()
     except Exception as e:
-        print(e)
+        print("Error while deleting form: ", e)
 
     connect.close()
 
@@ -189,22 +189,30 @@ def edit_form(form_id):
     connect = sqlite3.connect("database.db")
     cursor = connect.cursor()
 
-    cursor.execute("SELECT * FROM forms WHERE id = ? AND user_id = ?", (form_id, session["user_id"]))
+    cursor.execute("SELECT name, title FROM forms WHERE id = ? AND user_id = ?", (form_id, session["user_id"]))
     form = cursor.fetchone()
+
+    connect.close()
 
     if not form:
         return redirect("/")
 
     return render_template("form_template.html", form=form)
 
-@app.route("/api/save-changes", methods=['POST'])
+@app.route("/save-changes", methods=['POST'])
 @login_required
-def save_changes():
+def save_changes(): # save changes from forms in database
     data = request.get_json()
 
-    print(data)
+    connect = sqlite3.connect("database.db")
+    cursor = connect.cursor()
+    
+    cursor.execute("UPDATE forms SET name = ? WHERE user_id = ?", (data["file_title"].strip(), session["user_id"]))
 
-    return jsonify({"mensagem": "Mudanças efetuadas (a implementar!)"})
+    connect.commit()
+    connect.close()
+
+    return jsonify({"mensagem": "Mudanças efetuadas"})
     
 
 

@@ -1,13 +1,13 @@
 // Save form changes
 const save_btn = document.getElementById("save-button");
 
-save_btn.addEventListener('click', () => {
+save_btn.addEventListener('click', () => { // save form changes 
     
-    const data = {
+    const data = { // gets all the elements from form
         file_title: document.getElementById("file-title").innerText
     }
     
-    fetch("/api/save-changes", {
+    fetch("/save-changes", { // send form data to backend 
         method: "POST",
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
@@ -19,7 +19,7 @@ save_btn.addEventListener('click', () => {
         return res.json();
     })
     .then(data => {
-        console.log("Data: ",  data)
+        console.log("Data: ",  data.mensagem)
     })
     .catch(error => {
         console.error('Error: ', error)

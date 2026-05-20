@@ -15,11 +15,15 @@
             <div class="container-fluid">
                 <div class="d-flex">
                     <a class="navbar-brand" href="/">NewFORMS</a>
-                    <div id="file-title" contenteditable="true" >{{ form[1] }}</div>
+                    <div id="file-title" contenteditable="true" >{{ form[0] }}</div>
                 </div>             
                 
                 <button id="save-button">Save</button>
             </div>
         </nav>
+
+        <div class="container my-5 bg-body-secondary">
+            <div id="form-title" contenteditable="true"> {{ form[1] }}</div>
+        </div>
     </body>
 </html>
