@@ -13,6 +13,7 @@ bcrypt = Bcrypt(app)
 
 app.secret_key = os.environ.get("SECRET_KEY")
 
+# Session configuration for security and user experience
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True, # avoid JS injections (XSS)
     SESSION_COOKIE_SECURE=False, # require HTTPS (cookie won't be sent in HTTP) # FALSE FOR LOCAL TESTS
@@ -20,6 +21,7 @@ app.config.update(
     PERMANENT_SESSION_LIFETIME=3600 # expire session after 1 hour
 )
 
+# Home page
 @app.route("/")
 @login_required
 def index():
@@ -39,6 +41,7 @@ def index():
 
     return render_template("home.html", user=user, forms=forms)
 
+# Register new user
 @app.route("/register", methods=["GET", "POST"])
 def register():
     if request.method == "GET":
@@ -87,7 +90,7 @@ def register():
 
         return redirect(url_for("index"))
         
-
+# User Login
 @app.route("/login", methods=["POST", "GET"])
 def login():
     if request.method == "GET":
@@ -133,7 +136,7 @@ def logout():
     session.clear()
     return redirect(url_for("login"))   
 
-
+# Create new form in db
 @app.route("/create-form")
 @login_required
 def create_form():
@@ -163,7 +166,7 @@ def create_form():
     connect.close()
     return redirect(f"/e/{form_id}")
 
-
+# Delete form from db
 @app.route("/delete-form", methods=["POST"])
 def delete_form():
     form_id = request.form.get("form_id")
@@ -182,14 +185,14 @@ def delete_form():
 
     return redirect(url_for("index"))
 
-
+# Enter in form's edit page
 @app.route("/e/<int:form_id>")
 @login_required
 def edit_form(form_id):
     connect = sqlite3.connect("database.db")
     cursor = connect.cursor()
 
-    cursor.execute("SELECT name, title FROM forms WHERE id = ? AND user_id = ?", (form_id, session["user_id"]))
+    cursor.execute("SELECT name, title, description FROM forms WHERE id = ? AND user_id = ?", (form_id, session["user_id"]))
     form = cursor.fetchone()
 
     connect.close()
@@ -199,6 +202,7 @@ def edit_form(form_id):
 
     return render_template("form_template.html", form=form)
 
+# Save changes made in form's edit
 @app.route("/save-changes", methods=['POST'])
 @login_required
 def save_changes(): # save changes from forms in database

@@ -1,21 +1,89 @@
+.form-page {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
 .home-title {
     margin: 35px 0px;
     font-size: 50px;
 }
 
-.card-div {
+.form-btn-div {
     height:fit-content;
     width: 225px;
     background-color: gray;
     padding: 10px 20px;
 }
 
-#file-title {
+.file-title {
     max-width: 200px;
     height:50px;
+    padding: 0 10px;
+    border-radius: 10px;
     overflow: auto;
-    border: 1px solid black;
-    background-color: gray;
+    background-color: rgb(128, 167, 173);
     display: flex;
     align-items: center;
+}
+
+.save-button {
+    border: none;
+    background-color: rgb(93, 170, 140);
+    border-radius: 10px;
+    padding: 6px 10px;
+}
+
+.title-container {
+    width: 97%;
+    padding: 20px 10px;
+    border-radius: 10px;
+}
+
+.form-title {
+    font-size: 35px;
+    margin-bottom: 20px;
+    position: relative;
+}
+
+.form-title::before {
+    content: "";
+    position: absolute;
+    top: 50px;
+    left: 0px;
+    border-bottom: 1px solid rgb(172, 172, 172);
+    width: 100%;
+}
+
+.form-title:focus::before {
+    border-radius: 50px;
+    border-color: rgb(45, 183, 207);
+    border-width: 2px;
+}
+
+.form-description {
+    position: relative;
+    margin-bottom: 6px;
+}
+
+.form-description::before {
+    content: "";
+    position: absolute;
+    top: 25px;
+    left: 0px;
+    border-bottom: 1px solid rgb(172, 172, 172);
+    width: 100%;
+}
+
+.form-description:focus::before {
+    border-radius: 50px;
+    border-color: rgb(45, 183, 207);
+    border-width: 2px;
+}
+
+
+@media (min-width: 768px) {
+    .title-container {
+        width: 60%;
+    }
 }
