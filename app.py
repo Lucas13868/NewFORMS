@@ -200,7 +200,7 @@ def edit_form(form_id):
     if not form:
         return redirect("/")
 
-    return render_template("form_template.html", form=form)
+    return render_template("form_template.html", form=form, id=form_id)
 
 # Save changes made in form's edit
 @app.route("/save-changes", methods=['POST'])
@@ -211,15 +211,17 @@ def save_changes(): # save changes from forms in database
     connect = sqlite3.connect("database.db")
     cursor = connect.cursor()
     
-    cursor.execute("UPDATE forms SET name = ? WHERE user_id = ?", (data["file_title"].strip(), session["user_id"]))
+    cursor.execute("UPDATE forms SET name = ?, title = ?, description = ? WHERE id = ? AND user_id = ?", 
+                   (data["file_title"].strip(), data["form_title"].strip(), data["form_description"].strip(), data["form_id"], session["user_id"]))
 
     connect.commit()
     connect.close()
 
-    return jsonify({"mensagem": "Mudanças efetuadas"})
+    return jsonify({"msg": "Changes saved!"})
     
 
-
+# TODO: Verify why sqlite foreign key cascade isn't working
+# TODO: html to add the questions for a certain form
 
 if __name__ == "__main__":
     app.run(debug=True)

@@ -16,10 +16,11 @@
     padding: 10px 20px;
 }
 
-.file-title {
-    max-width: 200px;
+.form-name {
+    min-width: 70px;
+    max-width: 250px;
     height:50px;
-    padding: 0 10px;
+    padding: 10px 10px;
     border-radius: 10px;
     overflow: auto;
     background-color: rgb(128, 167, 173);
@@ -36,7 +37,7 @@
 
 .title-container {
     width: 97%;
-    padding: 20px 10px;
+    padding: 20px 20px;
     border-radius: 10px;
 }
 
@@ -46,41 +47,47 @@
     position: relative;
 }
 
-.form-title::before {
-    content: "";
-    position: absolute;
-    top: 50px;
-    left: 0px;
-    border-bottom: 1px solid rgb(172, 172, 172);
-    width: 100%;
-}
-
-.form-title:focus::before {
-    border-radius: 50px;
-    border-color: rgb(45, 183, 207);
-    border-width: 2px;
-}
-
 .form-description {
-    position: relative;
     margin-bottom: 6px;
 }
 
-.form-description::before {
-    content: "";
-    position: absolute;
-    top: 25px;
-    left: 0px;
-    border-bottom: 1px solid rgb(172, 172, 172);
-    width: 100%;
+.underlined {
+    position: relative;
+
+    &::before {
+        content: "";
+        position: absolute;
+        bottom: 0px;
+        left: 0px;
+        border-bottom: 1px solid rgb(172, 172, 172);
+        width: 100%;
+    }
+
+    &:focus::before {
+        border-radius: 50px;
+        border-color: rgb(45, 183, 207);
+        border-width: 2px;
+    }
 }
 
-.form-description:focus::before {
-    border-radius: 50px;
-    border-color: rgb(45, 183, 207);
-    border-width: 2px;
-}
+div[contenteditable] {
+    
+    &:focus {
+        outline: none;
+    }
 
+    &[data-placeholder]:empty::after {
+        content: attr(data-placeholder);
+        color: rgb(172, 172, 172);
+        cursor: text;
+        user-select: none;
+        display: inline-block;
+    }
+
+    &[data-placeholder]:focus::after {
+        content: "";
+    }
+}
 
 @media (min-width: 768px) {
     .title-container {

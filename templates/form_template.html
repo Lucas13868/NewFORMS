@@ -15,17 +15,17 @@
             <div class="container-fluid">
                 <div class="d-flex">
                     <a class="navbar-brand" href="/">NewFORMS</a>
-                    <div class="file-title" id="file-title" contenteditable="true" >{{ form[0] }}</div>
-                </div>             
+                    <div class="form-name max-length" id="form-name" contenteditable="true" data-placeholder="Form Name" data-max="20">{{ form[0] }}</div>
+                </div>
                 
-                <button class="save-button" id="save-button">Save</button>
+                <button class="save-button" id="save-button" form-id="{{ id }}">Save</button>
             </div>
         </nav>
 
         <div class="container form-page">
             <div class="title-container my-5 bg-body-secondary">
-                <div class="form-title" id="form-title" contenteditable="true"> {{ form[1] }}</div>
-                <div class="form-description" contenteditable="true"> {{ form[2] }} </div>
+                <div class="form-title underlined max-length" id="form-title" contenteditable="true" data-placeholder="Form Title" data-max="15">{{ form[1] }}</div>
+                <div class="form-description underlined" id="form-description" contenteditable="true" data-placeholder="Form Description">{{ form[2] }}</div>
             </div>
         </div>
         
