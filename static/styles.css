@@ -35,10 +35,11 @@
     padding: 6px 10px;
 }
 
-.title-container {
+.item-container {
     width: 97%;
     padding: 20px 20px;
     border-radius: 10px;
+    background-color: rgb(216, 223, 230);
 }
 
 .form-title {
@@ -90,7 +91,7 @@ div[contenteditable] {
 }
 
 @media (min-width: 768px) {
-    .title-container {
+    .item-container {
         width: 60%;
     }
 }

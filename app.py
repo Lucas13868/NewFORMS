@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 import sqlite3
 import os
 
-from helpers import login_required
+from helpers import login_required, sql_conn
 
 load_dotenv()
 
@@ -27,7 +27,7 @@ app.config.update(
 def index():
     user_id = session["user_id"]
 
-    connection = sqlite3.connect("database.db")
+    connection = sql_conn()
     cursor = connection.cursor()
 
     cursor.execute("SELECT username FROM users WHERE id = ?", (user_id,))
@@ -65,7 +65,7 @@ def register():
             return redirect(url_for("register"))
         
         pwd_hash = bcrypt.generate_password_hash(pwd).decode('utf-8') # encrypt password
-        connection = sqlite3.connect("database.db")
+        connection = sql_conn()
         cursor = connection.cursor()
         
         try:
@@ -108,7 +108,7 @@ def login():
             flash("Missing password!", "error")
             return redirect(url_for("login"))
         
-        connection = sqlite3.connect("database.db")
+        connection = sql_conn()
         cursor = connection.cursor()
         cursor.execute("SELECT hash, id FROM users WHERE email = ?", (email,))
         user_row = cursor.fetchone()
@@ -142,7 +142,7 @@ def logout():
 def create_form():
     user_id = session["user_id"]
 
-    connect = sqlite3.connect("database.db")
+    connect = sql_conn()
     cursor = connect.cursor()
 
     cursor.execute("INSERT INTO forms (user_id) VALUES (?)", (user_id,))
@@ -153,6 +153,7 @@ def create_form():
 
     cursor.execute("INSERT INTO questions (form_id, type, question_text) VALUES (?, ?, ?)", (form_id, 'text', 'Text question'))
     cursor.execute("INSERT INTO questions (form_id, type, question_text) VALUES (?, ?, ?)", (form_id, 'radio', 'Multi options question'))
+    cursor.execute("INSERT INTO questions (form_id, type, question_text) VALUES (?, ?, ?)", (form_id, 'checkbox', 'Checkbox question'))
     connect.commit()
 
     cursor.execute("SELECT id FROM questions WHERE form_id = ? AND type = 'radio'", (form_id,))
@@ -160,6 +161,12 @@ def create_form():
 
     for i in range(3):
         cursor.execute("INSERT INTO options (question_id, option_text) VALUES (?, ?)", (radio_id, f'Option{i + 1}'))
+
+    cursor.execute("SELECT id FROM questions WHERE form_id = ? AND type = 'checkbox'", (form_id,))
+    checkbox_id = cursor.fetchone()[0]
+
+    for i in range(3):
+        cursor.execute("INSERT INTO options (question_id, option_text) VALUES (?, ?)", (checkbox_id, f'Option{i + 1}'))
     
     connect.commit()
 
@@ -172,7 +179,7 @@ def delete_form():
     form_id = request.form.get("form_id")
     user_id = session["user_id"]
 
-    connect = sqlite3.connect("database.db")
+    connect = sql_conn()
     cursor = connect.cursor()
 
     try:
@@ -189,18 +196,35 @@ def delete_form():
 @app.route("/e/<int:form_id>")
 @login_required
 def edit_form(form_id):
-    connect = sqlite3.connect("database.db")
+    connect = sql_conn()
     cursor = connect.cursor()
 
     cursor.execute("SELECT name, title, description FROM forms WHERE id = ? AND user_id = ?", (form_id, session["user_id"]))
-    form = cursor.fetchone()
+    form = cursor.fetchone() # Get form
+
+    if not form:
+        connect.close()
+        return redirect("/")
+    
+    cursor.execute("SELECT id, type, question_text FROM questions WHERE form_id = ?", (form_id,))
+    questions = cursor.fetchall() # Get all form questions
+
+    options = {}
+    for q in questions:
+        if q[1] in ["radio", "checkbox"]:
+            cursor.execute("SELECT id, option_text FROM options WHERE question_id = ?", (q[0],))
+            q_opts = cursor.fetchall()
+
+            if q_opts:
+                options[q[0]] = q_opts # Storage each option for a certain question {question_id: [list of options]}
+    
 
     connect.close()
 
-    if not form:
-        return redirect("/")
+    session["form_id"] = form_id
+    session.permanent = True
 
-    return render_template("form_template.html", form=form, id=form_id)
+    return render_template("form_template.html", form=form, questions=questions, options=options)
 
 # Save changes made in form's edit
 @app.route("/save-changes", methods=['POST'])
@@ -208,11 +232,11 @@ def edit_form(form_id):
 def save_changes(): # save changes from forms in database
     data = request.get_json()
 
-    connect = sqlite3.connect("database.db")
+    connect = sql_conn()
     cursor = connect.cursor()
     
     cursor.execute("UPDATE forms SET name = ?, title = ?, description = ? WHERE id = ? AND user_id = ?", 
-                   (data["file_title"].strip(), data["form_title"].strip(), data["form_description"].strip(), data["form_id"], session["user_id"]))
+                   (data["file_title"].strip(), data["form_title"].strip(), data["form_description"].strip(), session["form_id"], session["user_id"]))
 
     connect.commit()
     connect.close()
@@ -220,8 +244,11 @@ def save_changes(): # save changes from forms in database
     return jsonify({"msg": "Changes saved!"})
     
 
-# TODO: Verify why sqlite foreign key cascade isn't working
-# TODO: html to add the questions for a certain form
 
 if __name__ == "__main__":
     app.run(debug=True)
+
+# TODO: allow user to change question type
+# TODO: allow user to add questions
+# TODO: allow user to delete questions
+# TODO: allow user to change order of questions

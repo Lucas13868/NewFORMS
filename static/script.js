@@ -4,7 +4,6 @@ const save_btn = document.getElementById("save-button");
 save_btn.addEventListener('click', () => { // save form changes 
     
     const data = { // gets all the elements from form
-        form_id: parseInt(save_btn.getAttribute("form-id"), 10),
         file_title: document.getElementById("form-name").innerText,
         form_title: document.getElementById("form-title").innerText,
         form_description: document.getElementById("form-description").innerText
@@ -48,10 +47,10 @@ document.querySelectorAll("[contenteditable]").forEach(el => {
             el.innerHTML = "";
         }
 
-        if (el.classList.contains("form-title")) {
+        if (el.classList.contains("form-title")) { // If empty fill the form title space with "Title"
             empty_replace(el, "Title");
         }
-        if (el.classList.contains("form-name")) {
+        if (el.classList.contains("form-name")) { // If empty fill the form name space with "Form"
             empty_replace(el, "Form");
         }
         
@@ -101,6 +100,83 @@ document.querySelectorAll(".max-length").forEach(elem => {
         const truncated_text = pasted_text.substring(0, chars_left);
 
         document.execCommand("insertText", false, truncated_text);
+    });
+});
+
+// Delete option for multi or checkbox questions
+function delete_option(elem) {
+    const question_id = elem.getAttribute("question-id");
+        const options_container = document.getElementById("options-" + question_id);
+        const options_number = options_container.querySelectorAll(".radio-input").length || options_container.querySelectorAll(".checkbox-input").length;
+
+        console.log(options_number);
+
+        if (options_number <= 1) return;
+
+        const option_node = document.getElementById(elem.getAttribute("option-div-id"));
+
+        option_node.remove();
+}
+
+document.querySelectorAll(".del-option").forEach(elem => {
+    elem.addEventListener("click", () => delete_option(elem));
+});
+
+
+// Create option for multi or checkbox questions
+document.querySelectorAll(".add-option-btn").forEach(elem => {
+    elem.addEventListener("click", () => {
+        const question_id = elem.getAttribute("question-id");
+        const option_id = crypto.randomUUID();
+        
+        const options_div = document.getElementById("options-" + elem.getAttribute("question-id"))
+
+        const input_div = document.createElement("div");
+
+        const label = document.createElement("label");
+
+        const input = document.createElement("input");
+        input.classList.add("options-input");
+        input.name = question_id;
+        input.value = "New Option";
+        input.disabled = true;
+
+        const span = document.createElement("span");
+        span.contentEditable= true;
+        span.innerText = "New Option";
+
+        const del_btn = document.createElement("button");
+        del_btn.classList.add("del-option");
+        del_btn.setAttribute("question-id", question_id);
+        del_btn.innerText = "Delete";
+        del_btn.addEventListener("click", () => delete_option(del_btn));
+
+        if (elem.classList.contains("radio")) {
+            input_div.classList.add("radio-input");
+            input_div.id = "radioElem-" + option_id;
+
+            input.type = "radio";
+
+            del_btn.setAttribute("option-div-id", "radioElem-" + option_id);
+
+            
+        }
+        else if (elem.classList.contains("checkbox")) {
+            input_div.classList.add("checkbox-input");
+            input_div.id = "checkboxElem-" + option_id;
+
+            input.type = "checkbox";
+
+            del_btn.setAttribute("option-div-id", "checkboxElem-" + option_id);
+        }
+
+        label.appendChild(input);
+        label.appendChild(span);
+
+        input_div.appendChild(label);
+        input_div.appendChild(del_btn);
+
+        options_div.appendChild(input_div);
     });
 });
 
