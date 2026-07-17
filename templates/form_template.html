@@ -22,83 +22,92 @@
             </div>
         </nav>
 
-        <div class="container form-page">
+        <div class="form-container mx-auto">
             <div class="item-container mt-5 mb-3">
                 <div class="form-title underlined max-length" id="form-title" contenteditable="true" data-placeholder="Form Title" data-max="15">{{ form[1] }}</div>
                 <div class="form-description underlined" id="form-description" contenteditable="true" data-placeholder="Form Description">{{ form[2] }}</div>
             </div>
 
-            {% for question in questions %}
-            <div class="item-container my-1 question-box">
-                <div class="question-text mb-2" contenteditable="true" data-placeholder="Question Text">{{ question[2] }}</div>
-                
-                {% if question[1] == 'text' %}
-                <div class="mb-2">
-                    <label for="type-{{ question[0] }}">Type</label>
-                    <select name="type" id="type-{{ question[0] }}">
-                        <option value="text" selected>Text</option>
-                        <option value="mult">Multi Option</option>
-                        <option value="checkbox">Checkbox</option>
-                    </select>
-                </div>
+            <div class="questions-container mb-4">
+                {% for question in questions %}
+                <div class="item-container my-1" id="question-{{ question[0] }}">
+                    <button class="del-question-btn mb-2" id="del-question-btn-{{ question[0] }}">Delete Question</button>
 
-                <input class="text-input" id="textInput-{{ question[0] }}" type="text" placeholder="Your Answer" disabled>
+                    <div class="question-text mb-2" contenteditable="true" data-placeholder="Question Text">{{ question[2] }}</div>
+                    
+                    {% if question[1] == 'text' %}
+                    <div class="mb-2">
+                        <label for="types-{{ question[0] }}">Type</label>
+                        <select class="question-types" name="type" id="types-{{ question[0] }}" current-type="text">
+                            <option value="text" selected>Text</option>
+                            <option value="radio">Multi Option</option>
+                            <option value="checkbox">Checkbox</option>
+                        </select>
+                    </div>
 
-                {% elif question[1] == 'radio' %}
-                <div class="mb-2">
-                    <label for="types-{{ question[0] }}">Type</label>
-                    <select name="types" id="types-{{ question[0] }}">
-                        <option value="text">Text</option>
-                        <option value="mult" selected>Multi Option</option>
-                        <option value="checkbox">Checkbox</option>
-                    </select>
-                </div>
+                    <input class="text-input" id="text-input-{{ question[0] }}" type="text" placeholder="Your Answer" disabled>
 
-                <div id="options-{{ question[0] }}">
-                    {% for opt in options[question[0]] %}
-                    <div class="radio-input" id="radioElem-{{ opt[0] }}">
-                        <label>
-                            <input class="options-input" type="{{ question[1] }}" id="{{ opt[0] }}" name="{{ question[0] }}" value="{{ opt[1] }}" disabled>
-                            <span contenteditable="true">{{ opt[1] }}</span>
-                        </label>
-
-                        <button class="del-option" option-div-id="radioElem-{{ opt[0] }}" question-id="{{ question[0] }}">Delete</button>
+                    {% elif question[1] == 'radio' %}
+                    <div class="mb-2">
+                        <label for="types-{{ question[0] }}">Type</label>
+                        <select class="question-types" name="types" id="types-{{ question[0] }}" current-type="radio">
+                            <option value="text">Text</option>
+                            <option value="radio" selected>Multi Option</option>
+                            <option value="checkbox">Checkbox</option>
+                        </select>
                     </div>
                     
-                    {% endfor %}
-                </div>
-                
-                <button class="add-option-btn radio mt-3" question-id="{{ question[0] }}">Add Option</button>
+                    <div class="options-container" id="options-{{ question[0] }}">
+                        {% for opt in options[question[0]] %}
+                        <div class="radio-input d-flex flex-row justify-content-between" id="radioElem-{{ opt[0] }}">
+                            <label>
+                                <input class="options-input" type="{{ question[1] }}" id="{{ opt[0] }}" name="{{ question[0] }}" value="{{ opt[1] }}" disabled>
+                                <span contenteditable="true">{{ opt[1] }}</span>
+                            </label>
 
-                {% elif question[1] == 'checkbox' %}
-                <div class="mb-2">
-                    <label for="types-{{ question[0] }}">Type</label>
-                    <select name="types" id="types-{{ question[0] }}">
-                        <option value="text">Text</option>
-                        <option value="mult">Multi Option</option>
-                        <option value="checkbox" selected>Checkbox</option>
-                    </select>
-                </div>
-
-                <div id="options-{{ question[0] }}">
-                    {% for opt in options[question[0]] %}
-                    <div class="checkbox-input" id="checkboxElem-{{ opt[0] }}">
-                        <label>
-                            <input class="options-input" type="{{ question[1] }}" id="{{ opt[0] }}" name="{{ question[0] }}" value="{{ opt[1] }}" disabled>
-                            <span contenteditable="true">{{ opt[1] }}</span>
-                        </label>
-
-                        <button class="del-option" option-div-id="checkboxElem-{{ opt[0] }}" question-id="{{ question[0] }}">Delete</button>
+                            <button class="del-option" option-div-id="radioElem-{{ opt[0] }}" question-id="{{ question[0] }}">Delete</button>
+                        </div>
+                        
+                        {% endfor %}
                     </div>
-                    {% endfor %}
-                </div>
-                
-                <button class="add-option-btn checkbox mt-3" question-id="{{ question[0] }}">Add Option</button>
-                {% endif %}
-            </div>
-            {% endfor %}
+                    
+                    <button class="add-option-btn mt-3" id="add-opt-btn-{{ question[0] }}" question-id="{{ question[0] }}" data-question-type="radio">Add Option</button>
 
-            <button>Add question</button>
+                    {% elif question[1] == 'checkbox' %}
+                    <div class="mb-2">
+                        <label for="types-{{ question[0] }}">Type</label>
+                        <select class="question-types" name="types" id="types-{{ question[0] }}" current-type="checkbox">
+                            <option value="text">Text</option>
+                            <option value="radio">Multi Option</option>
+                            <option value="checkbox" selected>Checkbox</option>
+                        </select>
+                    </div>
+
+                    <div id="options-{{ question[0] }}">
+                        {% for opt in options[question[0]] %}
+                        <div class="checkbox-input d-flex flex-row justify-content-between" id="checkboxElem-{{ opt[0] }}">
+                            <label>
+                                <input class="options-input" type="{{ question[1] }}" id="{{ opt[0] }}" name="{{ question[0] }}" value="{{ opt[1] }}" disabled>
+                                <span contenteditable="true">{{ opt[1] }}</span>
+                            </label>
+
+                            <button class="del-option" option-div-id="checkboxElem-{{ opt[0] }}" question-id="{{ question[0] }}">Delete</button>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    
+                    <button class="add-option-btn mt-3" id="add-opt-btn-{{ question[0] }}" question-id="{{ question[0] }}" data-question-type="checkbox">Add Option</button>
+                    {% endif %}
+
+                    <div class="move-btn-container d-flex flex-column justify-content-center">
+                        <button class="up-btn" id="up-btn-{{ question[0] }}" data-action="up">Up</button>
+                        <button class="down-btn" id="down-btn-{{ question[0] }}" data-action="down">Down</button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <button id="add-question-btn">Add question</button>
         </div>
         
     </body>

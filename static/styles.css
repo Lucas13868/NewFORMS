@@ -1,7 +1,9 @@
-.form-page {
+.form-container {
     display: flex;
     flex-direction: column;
     align-items: center;
+    width: 97%;
+    padding-bottom: 50px;
 }
 
 .home-title {
@@ -36,10 +38,22 @@
 }
 
 .item-container {
-    width: 97%;
+    width: 100%;
     padding: 20px 20px;
     border-radius: 10px;
     background-color: rgb(216, 223, 230);
+    position: relative;
+}
+
+.move-btn-container {
+    position: absolute;
+    right: -70px;
+    top: 0;
+    height: 100%;
+}
+
+.questions-container {
+    width: 100%;
 }
 
 .form-title {
@@ -70,7 +84,15 @@
         border-width: 2px;
     }
 }
+/*
+.options-container {
+    width: 80%;
+}
 
+.move-btn-container {
+    width: 20%;
+}
+*/
 div[contenteditable] {
     
     &:focus {
@@ -91,7 +113,15 @@ div[contenteditable] {
 }
 
 @media (min-width: 768px) {
-    .item-container {
-        width: 60%;
+    .form-container {
+        width: 50%;
     }
+    /*
+    .options-container {
+        width: 90%;
+    }
+
+    .move-btn-container {
+        width: 10%;
+    }*/
 }

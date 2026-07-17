@@ -248,7 +248,3 @@ def save_changes(): # save changes from forms in database
 if __name__ == "__main__":
     app.run(debug=True)
 
-# TODO: allow user to change question type
-# TODO: allow user to add questions
-# TODO: allow user to delete questions
-# TODO: allow user to change order of questions
