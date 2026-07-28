@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 import sqlite3
 import os
 
-from helpers import login_required, sql_conn
+from helpers import login_required, sql_conn, write_conn, generate_uuid
 
 load_dotenv()
 
@@ -20,6 +20,11 @@ app.config.update(
     SESSION_COOKIE_SAMESITE="Lax", # protect against CSRF attacks
     PERMANENT_SESSION_LIFETIME=3600 # expire session after 1 hour
 )
+
+# Allow db simultaneous write and read
+conn = sqlite3.connect("database.db")
+conn.execute("PRAGMA journal_mode=WAL;")
+conn.close()
 
 # Home page
 @app.route("/")
@@ -65,28 +70,33 @@ def register():
             return redirect(url_for("register"))
         
         pwd_hash = bcrypt.generate_password_hash(pwd).decode('utf-8') # encrypt password
-        connection = sql_conn()
+        user_id = generate_uuid()
+
+        connection = write_conn()
         cursor = connection.cursor()
         
         try:
-            cursor.execute("INSERT INTO users (username, hash, email) VALUES (?, ?, ?)", (name, pwd_hash, email)) # insert user in db
-            connection.commit()
+            with connection: # Starts transaction
+                cursor.execute("INSERT INTO users (id, username, hash, email) VALUES (?, ?, ?, ?)", (user_id, name, pwd_hash, email)) # insert user in db
+
+            connection.close()
+                
         except sqlite3.IntegrityError: # if email has already been used, returns an error
             flash("Email already registered!", "error")
-            connection.close()
-            return redirect(url_for("register"))
-        except Exception as e:
-            flash("Something went wrong! Try again later.")
+
             connection.close()
             return redirect(url_for("register"))
         
-        cursor.execute("SELECT id FROM users WHERE email = ?", (email,))
-        user_id = cursor.fetchone()
+        except Exception as e:
+            flash("Something went wrong! Try again later.", "error")
+            print(f"Error: {e}")
 
-        session["user_id"] = user_id[0] 
-        session.permanent = True # saves user session for different brower sessions
+            connection.close()
+            return redirect(url_for("register"))
+        
 
-        connection.close()
+        session["user_id"] = user_id
+        session.permanent = True # saves user session for different browser sessions
 
         return redirect(url_for("index"))
         
@@ -142,36 +152,40 @@ def logout():
 def create_form():
     user_id = session["user_id"]
 
-    connect = sql_conn()
+    connect = write_conn()
     cursor = connect.cursor()
 
-    cursor.execute("INSERT INTO forms (user_id) VALUES (?)", (user_id,))
-    connect.commit()
+    form_id = generate_uuid()
 
-    cursor.execute("SELECT id FROM forms WHERE user_id = ? ORDER BY created_at DESC", (user_id,))
-    form_id = cursor.fetchone()[0]
+    text_id = generate_uuid()
+    radio_id = generate_uuid()
+    checkbox_id = generate_uuid()
 
-    cursor.execute("INSERT INTO questions (form_id, type, question_text) VALUES (?, ?, ?)", (form_id, 'text', 'Text question'))
-    cursor.execute("INSERT INTO questions (form_id, type, question_text) VALUES (?, ?, ?)", (form_id, 'radio', 'Multi options question'))
-    cursor.execute("INSERT INTO questions (form_id, type, question_text) VALUES (?, ?, ?)", (form_id, 'checkbox', 'Checkbox question'))
-    connect.commit()
+    try:
+        with connect:
+            cursor.execute("INSERT INTO forms (id, user_id) VALUES (?, ?)", (form_id, user_id))
 
-    cursor.execute("SELECT id FROM questions WHERE form_id = ? AND type = 'radio'", (form_id,))
-    radio_id = cursor.fetchone()[0]
+            cursor.execute("INSERT INTO questions (id, form_id, type, question_text, quest_order) VALUES (?, ?, ?, ?, ?)", (text_id, form_id, 'text', 'Text question', 1))
+            cursor.execute("INSERT INTO questions (id, form_id, type, question_text, quest_order) VALUES (?, ?, ?, ?, ?)", (radio_id, form_id, 'radio', 'Multi options question', 2))
+            cursor.execute("INSERT INTO questions (id, form_id, type, question_text, quest_order) VALUES (?, ?, ?, ?, ?)", (checkbox_id, form_id, 'checkbox', 'Checkbox question', 3))
 
-    for i in range(3):
-        cursor.execute("INSERT INTO options (question_id, option_text) VALUES (?, ?)", (radio_id, f'Option{i + 1}'))
 
-    cursor.execute("SELECT id FROM questions WHERE form_id = ? AND type = 'checkbox'", (form_id,))
-    checkbox_id = cursor.fetchone()[0]
+            for i in range(3):
+                cursor.execute("INSERT INTO options (id, question_id, option_text) VALUES (?, ?, ?)", (generate_uuid(), radio_id, f'Option{i + 1}'))
 
-    for i in range(3):
-        cursor.execute("INSERT INTO options (question_id, option_text) VALUES (?, ?)", (checkbox_id, f'Option{i + 1}'))
-    
-    connect.commit()
+            for i in range(3):
+                cursor.execute("INSERT INTO options (id, question_id, option_text) VALUES (?, ?, ?)", (generate_uuid(), checkbox_id, f'Option{i + 1}'))
 
-    connect.close()
-    return redirect(f"/e/{form_id}")
+        connect.close()
+
+        return redirect(f"/e/{form_id}")
+
+    except Exception as e:
+        print(f"Error during form creation: {e}")
+
+        connect.close()
+
+        return redirect(url_for("index"))
 
 # Delete form from db
 @app.route("/delete-form", methods=["POST"])
@@ -179,12 +193,12 @@ def delete_form():
     form_id = request.form.get("form_id")
     user_id = session["user_id"]
 
-    connect = sql_conn()
+    connect = write_conn()
     cursor = connect.cursor()
 
     try:
-        cursor.execute("DELETE FROM forms WHERE id = ? AND user_id = ?", (form_id, user_id))
-        connect.commit()
+        with connect:
+            cursor.execute("DELETE FROM forms WHERE id = ? AND user_id = ?", (form_id, user_id))
     except Exception as e:
         print("Error while deleting form: ", e)
 
@@ -193,9 +207,11 @@ def delete_form():
     return redirect(url_for("index"))
 
 # Enter in form's edit page
-@app.route("/e/<int:form_id>")
+@app.route("/e/<uuid:form_id>")
 @login_required
 def edit_form(form_id):
+    form_id = str(form_id)
+
     connect = sql_conn()
     cursor = connect.cursor()
 
@@ -206,7 +222,7 @@ def edit_form(form_id):
         connect.close()
         return redirect("/")
     
-    cursor.execute("SELECT id, type, question_text FROM questions WHERE form_id = ?", (form_id,))
+    cursor.execute("SELECT id, type, question_text, quest_order, required FROM questions WHERE form_id = ? ORDER BY quest_order", (form_id,))
     questions = cursor.fetchall() # Get all form questions
 
     options = {}
@@ -221,30 +237,86 @@ def edit_form(form_id):
 
     connect.close()
 
-    session["form_id"] = form_id
-    session.permanent = True
-
-    return render_template("form_template.html", form=form, questions=questions, options=options)
+    return render_template("form_template.html", form=form, questions=questions, options=options, form_id=form_id)
 
 # Save changes made in form's edit
-@app.route("/save-changes", methods=['POST'])
+@app.route("/api/save-changes/<uuid:form_id>", methods=['POST'])
 @login_required
-def save_changes(): # save changes from forms in database
-    data = request.get_json()
+def save_changes(form_id): # save changes from forms in database
+    form_id = str(form_id)
 
+    json = request.get_json()
+    changes = json.get("changes", [])
+    
     connect = sql_conn()
     cursor = connect.cursor()
     
-    cursor.execute("UPDATE forms SET name = ?, title = ?, description = ? WHERE id = ? AND user_id = ?", 
-                   (data["file_title"].strip(), data["form_title"].strip(), data["form_description"].strip(), session["form_id"], session["user_id"]))
+    try:
+        with connect:
+            for item in changes:
+                table = item.get("table")
+                action = item.get("action")
+                uuid = item.get("id")
+                data = item.get("data")
 
-    connect.commit()
-    connect.close()
+                match table:
+                    case "forms":
+                        if "form-name" in data:
+                            cursor.execute("UPDATE forms SET name = ? WHERE id = ?", (data.get("form-name"), form_id))
+                        if "form-title" in data:
+                            cursor.execute("UPDATE forms SET title = ? WHERE id = ?", (data.get("form-title"), form_id))
+                        if "form-description" in data:
+                            cursor.execute("UPDATE forms SET description = ? WHERE id = ?", (data.get("form-description"), form_id))
 
-    return jsonify({"msg": "Changes saved!"})
+                    case "questions":
+                        match action:
+                            case "CREATE":
+                                cursor.execute("INSERT INTO questions (id, type, question_text, quest_order, form_id) VALUES (?, ?, ?, ?, ?)", 
+                                            (uuid, data.get("type"), data.get("text"), data.get("order"), form_id))
+                                
+                            case "UPDATE":
+                                if "text" in data:
+                                    cursor.execute("UPDATE questions SET question_text = ? WHERE id = ?", (data.get("text"), uuid))
+                                if "required" in data:
+                                    cursor.execute("UPDATE questions SET required = ? WHERE id = ?", (data.get("required"), uuid))
+                                if "type" in data:
+                                    cursor.execute("UPDATE questions SET type = ? WHERE id = ?", (data.get("type"), uuid))
+                                if "order" in data:
+                                    cursor.execute("UPDATE questions SET quest_order = ? WHERE id = ?", (data.get("order"), uuid))
+
+                            case "DELETE":
+                                cursor.execute("DELETE FROM questions WHERE id = ?", (uuid,))
+
+                            case _:
+                                raise Exception("Invalid action!")
+                    case "options":
+                        match action:
+                            case "CREATE":
+                                cursor.execute("INSERT INTO options (id, option_text, question_id) VALUES (?, ?, ?)", (uuid, data.get("value"), data.get("quest_id")))
+                            case "UPDATE":
+                                if "value" in data:
+                                    cursor.execute("UPDATE options SET option_text = ? WHERE id = ?", (data.get("value"), uuid))
+                            case "DELETE":
+                                cursor.execute("DELETE FROM options WHERE id = ?", (uuid,))
+                            case _:
+                                raise Exception("Invalid action!")
+                    case _:
+                        raise Exception("Table don't exist!")
+
+        connect.close()
+
+        return jsonify({"msg": "Changes saved!", "status": "ok"})
     
+    except Exception as e:
+        print(f"Error: {str(e)}")
 
+        connect.close()
+        
+        return jsonify({"msg": str(e), "status": "error"})
+
+    
 
 if __name__ == "__main__":
     app.run(debug=True)
+
 

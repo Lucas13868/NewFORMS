@@ -6,102 +6,125 @@
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
         <link href="/static/styles.css" rel="stylesheet">
-        <script src="/static/script.js" defer></script>
+        <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
+        <script type="module" src="/static/script.js" defer></script>
 
-        <title>My form</title>
+        <title>{{ form[0] }}</title>
     </head>
     <body>
         <nav class="navbar bg-body-tertiary">
             <div class="container-fluid">
                 <div class="d-flex">
-                    <a class="navbar-brand" href="/">NewFORMS</a>
-                    <div class="form-name max-length" id="form-name" contenteditable="true" data-placeholder="Form Name" data-max="20">{{ form[0] }}</div>
+                    <a class="navbar-brand" id="logo" href="/">NewFORMS</a>
+                    <div class="form-name max-length" data-id="{{ form_id }}" data-table="forms" data-field="form-name" contenteditable="true" data-placeholder="Form Name" data-max="25">{{ form[0] }}</div>
                 </div>
                 
-                <button class="save-button" id="save-button">Save</button>
+                <div>
+                   <span class="mx-4" id="saving-msg"></span>
+                <button class="save-button" id="save-button">Save</button> 
+                </div>
             </div>
         </nav>
 
-        <div class="form-container mx-auto">
+        <div class="form-container mx-auto" data-id="{{ form_id }}">
             <div class="item-container mt-5 mb-3">
-                <div class="form-title underlined max-length" id="form-title" contenteditable="true" data-placeholder="Form Title" data-max="15">{{ form[1] }}</div>
-                <div class="form-description underlined" id="form-description" contenteditable="true" data-placeholder="Form Description">{{ form[2] }}</div>
+                <div class="form-title underlined max-length" data-id="{{ form_id }}" data-table="forms" data-field="form-title" contenteditable="true" data-placeholder="Form Title" data-max="100">{{ form[1] }}</div>
+                <div class="form-description underlined" data-id="{{ form_id }}" data-table="forms" data-field="form-description" contenteditable="true" data-placeholder="Form Description">{{ form[2] }}</div>
             </div>
 
             <div class="questions-container mb-4">
                 {% for question in questions %}
-                <div class="item-container my-1" id="question-{{ question[0] }}">
-                    <button class="del-question-btn mb-2" id="del-question-btn-{{ question[0] }}">Delete Question</button>
+                <div class="item-container my-1" data-id="{{ question[0] }}" data-order="{{ question[3] }}">
+                    <button class="del-question-btn mb-2" data-id="{{ question[0] }}">Delete Question</button>
 
-                    <div class="question-text mb-2" contenteditable="true" data-placeholder="Question Text">{{ question[2] }}</div>
+                    {% if question[4] == False %}
+                    <label>
+                        <input type="checkbox" data-id="{{ question[0] }}" data-table="questions" data-field="required" value="required">
+                        <span>Required</span>
+                    </label>
+                    {% else %}
+                    <label>
+                        <input type="checkbox" data-id="{{ question[0] }}" data-table="questions" data-field="required" value="required" checked>
+                        <span>Required</span>
+                    </label>
+                    {% endif %}
+
+                    <div class="question-text mb-2" data-id="{{ question[0] }}" data-table="questions" data-field="text" contenteditable="true" data-placeholder="Question Text">{{ question[2] }}</div>
                     
                     {% if question[1] == 'text' %}
                     <div class="mb-2">
-                        <label for="types-{{ question[0] }}">Type</label>
-                        <select class="question-types" name="type" id="types-{{ question[0] }}" current-type="text">
-                            <option value="text" selected>Text</option>
-                            <option value="radio">Multi Option</option>
-                            <option value="checkbox">Checkbox</option>
-                        </select>
+                        <label>
+                            <span>Type</span>
+                            <select class="question-types" name="type" data-id="{{ question[0] }}" current-type="text">
+                                <option value="text" selected>Text</option>
+                                <option value="radio">Multi Option</option>
+                                <option value="checkbox">Checkbox</option>
+                            </select>
+                        </label>
+                        
                     </div>
 
-                    <input class="text-input" id="text-input-{{ question[0] }}" type="text" placeholder="Your Answer" disabled>
+                    <input class="text-input" data-id="{{ question[0] }}" name="text-input" type="text" placeholder="Your Answer" disabled>
 
                     {% elif question[1] == 'radio' %}
                     <div class="mb-2">
-                        <label for="types-{{ question[0] }}">Type</label>
-                        <select class="question-types" name="types" id="types-{{ question[0] }}" current-type="radio">
-                            <option value="text">Text</option>
-                            <option value="radio" selected>Multi Option</option>
-                            <option value="checkbox">Checkbox</option>
-                        </select>
+                        <label>
+                            <span>Type</span>
+                            <select class="question-types" name="types" data-id="{{ question[0] }}" current-type="radio">
+                                <option value="text">Text</option>
+                                <option value="radio" selected>Multi Option</option>
+                                <option value="checkbox">Checkbox</option>
+                            </select>
+                        </label>
                     </div>
                     
-                    <div class="options-container" id="options-{{ question[0] }}">
+                    <div class="options-container" data-id="{{ question[0] }}">
                         {% for opt in options[question[0]] %}
-                        <div class="radio-input d-flex flex-row justify-content-between" id="radioElem-{{ opt[0] }}">
+                        <div class="radio-input option d-flex flex-row justify-content-between" data-id="{{ opt[0] }}">
                             <label>
-                                <input class="options-input" type="{{ question[1] }}" id="{{ opt[0] }}" name="{{ question[0] }}" value="{{ opt[1] }}" disabled>
-                                <span contenteditable="true">{{ opt[1] }}</span>
+                                <input class="options-input mx-1" type="{{ question[1] }}" name="{{ question[0] }}" value="{{ opt[1] }}" disabled>
+                                <span data-id="{{ opt[0] }}" data-table="options" data-field="value" contenteditable="true">{{ opt[1] }}</span>
                             </label>
 
-                            <button class="del-option" option-div-id="radioElem-{{ opt[0] }}" question-id="{{ question[0] }}">Delete</button>
+                            <button class="del-option">Delete</button>
                         </div>
                         
                         {% endfor %}
                     </div>
                     
-                    <button class="add-option-btn mt-3" id="add-opt-btn-{{ question[0] }}" question-id="{{ question[0] }}" data-question-type="radio">Add Option</button>
+                    <button class="add-option-btn mt-3" data-id="{{ question[0] }}">Add Option</button>
 
                     {% elif question[1] == 'checkbox' %}
                     <div class="mb-2">
-                        <label for="types-{{ question[0] }}">Type</label>
-                        <select class="question-types" name="types" id="types-{{ question[0] }}" current-type="checkbox">
-                            <option value="text">Text</option>
-                            <option value="radio">Multi Option</option>
-                            <option value="checkbox" selected>Checkbox</option>
-                        </select>
+                        <label>
+                            <span>Type</span>
+                            <select class="question-types" name="types" data-id="{{ question[0] }}" current-type="checkbox">
+                                <option value="text">Text</option>
+                                <option value="radio">Multi Option</option>
+                                <option value="checkbox" selected>Checkbox</option>
+                            </select>
+                        </label>
                     </div>
 
-                    <div id="options-{{ question[0] }}">
+                    <div class="options-container" data-id="{{ question[0] }}">
                         {% for opt in options[question[0]] %}
-                        <div class="checkbox-input d-flex flex-row justify-content-between" id="checkboxElem-{{ opt[0] }}">
+                        <div class="checkbox-input option d-flex flex-row justify-content-between" data-id="{{ opt[0] }}">
                             <label>
-                                <input class="options-input" type="{{ question[1] }}" id="{{ opt[0] }}" name="{{ question[0] }}" value="{{ opt[1] }}" disabled>
-                                <span contenteditable="true">{{ opt[1] }}</span>
+                                <input class="options-input mx-1" type="{{ question[1] }}" data-id="{{ opt[0] }}" name="{{ question[0] }}" value="{{ opt[1] }}" disabled>
+                                <span data-id="{{ opt[0] }}" data-table="options" data-field="value" contenteditable="true">{{ opt[1] }}</span>
                             </label>
 
-                            <button class="del-option" option-div-id="checkboxElem-{{ opt[0] }}" question-id="{{ question[0] }}">Delete</button>
+                            <button class="del-option">Delete</button>
                         </div>
                         {% endfor %}
                     </div>
                     
-                    <button class="add-option-btn mt-3" id="add-opt-btn-{{ question[0] }}" question-id="{{ question[0] }}" data-question-type="checkbox">Add Option</button>
+                    <button class="add-option-btn mt-3" data-id="{{ question[0] }}">Add Option</button>
                     {% endif %}
 
                     <div class="move-btn-container d-flex flex-column justify-content-center">
-                        <button class="up-btn" id="up-btn-{{ question[0] }}" data-action="up">Up</button>
-                        <button class="down-btn" id="down-btn-{{ question[0] }}" data-action="down">Down</button>
+                        <button class="up-btn" data-id="{{ question[0] }}" data-action="up">Up</button>
+                        <button class="down-btn" data-id="{{ question[0] }}" data-action="down">Down</button>
                     </div>
                 </div>
                 {% endfor %}

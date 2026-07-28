@@ -1,31 +1,110 @@
-// Save form changes
-const save_btn = document.getElementById("save-button");
+import { uuidv7 } from "https://unpkg.com/uuidv7@^1"
 
-save_btn.addEventListener('click', () => { // save form changes 
-    
-    const data = { // gets all the elements from form
-        file_title: document.getElementById("form-name").innerText,
-        form_title: document.getElementById("form-title").innerText,
-        form_description: document.getElementById("form-description").innerText
-    }
-    
-    fetch("/save-changes", { // send form data to backend 
+// Save form changes
+
+let changes_done = [];
+let can_save = true;
+
+// Send changes made to backend
+function send_changes() {
+    if (!can_save) return;
+
+    verify_order();
+
+    if (changes_done.length === 0) return;
+
+    const changes_to_save = [...changes_done];
+
+    changes_done = [];
+
+    const form_id = document.querySelector(".form-container").dataset.id;
+
+    fetch(`/api/save-changes/${form_id}`, { // send form data to backend 
         method: "POST",
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
+        body: JSON.stringify({changes: changes_to_save})
     })
     .then(res => {
         if (!res.ok) {
             throw new Error("Network error");
+            change_saving_msg("Network error! (reloading...)");
+            can_save = false;
+            setTimeout(() => location.reload(), 3000);
         }
         return res.json();
     })
     .then(data => {
-        console.log("Data: ",  data.msg)
+        if (data.status == "ok") {
+            change_saving_msg(data.msg);
+        }
+        else {
+            change_saving_msg("Error: " + data.msg + " (reloading...)");
+            can_save = false;
+            setTimeout(() => location.reload(), 3000);
+        }
     })
     .catch(error => {
-        console.error('Error: ', error)
+        change_saving_msg('Error: ', error)
     })
+}
+
+const save_btn = document.getElementById("save-button");
+
+save_btn.addEventListener('click', () => send_changes());
+
+
+// Sets a debounce and max wait to send changes
+// Send after 2 sec of inactivity or 10 sec of activity
+const debounced_save = _.debounce(send_changes, 2000, {
+    maxWait: 10000
+});
+
+
+// Verify if new change already exists
+function verify_change_existence(table, id, field, value) {
+    const existingElem = changes_done.find(item => 
+        item.table === table && item.id === id && (item.action === "CREATE" || item.action === "UPDATE")
+    );
+
+    if (existingElem) { // If the question was already changed, update the queue
+        existingElem.data[field] = value;
+    }
+    else { // If doesn't exist, add a new change in the queue
+        changes_done.push({
+            table: table, 
+            id: id, 
+            action: "UPDATE", 
+            data: {[field]: value}
+        });
+    }
+}
+
+// Register each change made
+function register_change(table, id, field, value) {
+
+    verify_change_existence(table, id, field, value)
+    
+    debounced_save();
+
+    change_saving_msg("Saving...");
+}
+
+// Observes changes made in ellements wich the debounce is applied
+document.body.addEventListener("input", event => {
+    const elem = event.target;
+
+    if (elem.hasAttribute('data-table') && elem.hasAttribute('data-id')) {
+        const table = elem.getAttribute('data-table');
+        const id = elem.getAttribute("data-id");
+        const field = elem.getAttribute("data-field");
+        
+        let value = elem.innerText;
+        if (elem.type === "checkbox") {
+            value = elem.checked;
+        }
+        
+        register_change(table, id, field, value);
+    }
 });
 
 
@@ -37,6 +116,12 @@ async function empty_replace(el, txt) { // Fill an editable div's space if empty
 
         if (el.innerHTML === "") {
             el.innerHTML = txt;
+
+            const table = el.getAttribute('data-table');
+            const id = el.getAttribute("data-id");
+            const field = el.getAttribute("data-field");
+
+            register_change(table, id, field, txt);
         }
     }
 }
@@ -105,15 +190,23 @@ document.querySelectorAll(".max-length").forEach(elem => {
 
 // Delete option for multi or checkbox questions
 function delete_option(elem) {
-    const question_id = elem.getAttribute("question-id");
-        const options_container = document.getElementById("options-" + question_id);
-        const options_number = options_container.querySelectorAll(".radio-input").length || options_container.querySelectorAll(".checkbox-input").length;
+    const options_container = elem.closest(".options-container");
+    const options_number = options_container.querySelectorAll(".radio-input").length || options_container.querySelectorAll(".checkbox-input").length;
 
-        if (options_number <= 1) return;
+    if (options_number <= 1) return;
+    
+    const option_node = elem.closest(".option");
 
-        const option_node = document.getElementById(elem.getAttribute("option-div-id"));
+    changes_done.push({
+        table: "options",
+        id: option_node.dataset.id,
+        action: "DELETE",
+        data: {}
+    });
 
-        option_node.remove();
+    send_changes();
+
+    option_node.remove();
 }
 
 document.querySelectorAll(".del-option").forEach(elem => {
@@ -123,47 +216,42 @@ document.querySelectorAll(".del-option").forEach(elem => {
 
 // Create option for multi or checkbox questions
 function create_option(elem) {
-    const question_id = elem.getAttribute("question-id");
-    const option_id = crypto.randomUUID();
+    const question_id = elem.dataset.id;
+    const option_id = uuidv7();
     
+    const select_types = document.querySelector(`.question-types[data-id='${question_id}']`);
 
-    const options_div = document.getElementById("options-" + elem.getAttribute("question-id"))
+    const options_div = document.querySelector(`.options-container[data-id='${question_id}']`);
 
     const input_div = document.createElement("div");
+    input_div.dataset.id = option_id;
 
     const label = document.createElement("label");
 
     const input = document.createElement("input");
-    input.classList.add("options-input");
+    input.classList.add("options-input", "mx-1");
     input.name = question_id;
+    input.dataset.id = option_id;
     input.value = "New Option";
     input.disabled = true;
 
     const span = document.createElement("span");
-    span.contentEditable= true;
+    span.classList.add("ms-1");
+    span.contentEditable = true;
     span.innerText = "New Option";
 
     const del_btn = document.createElement("button");
     del_btn.classList.add("del-option");
-    del_btn.setAttribute("question-id", question_id);
     del_btn.innerText = "Delete";
     del_btn.addEventListener("click", () => delete_option(del_btn));
 
-    if (elem.dataset.questionType === "radio") {
-        ["radio-input", "d-flex", "flex-row", "justify-content-between"].forEach(c => input_div.classList.add(c));
-        input_div.id = "radioElem-" + option_id;
-
-        input.type = "radio";
-
-        del_btn.setAttribute("option-div-id", "radioElem-" + option_id);        
+    if (select_types.value === "radio") {
+        input_div.classList.add("radio-input", "option", "d-flex", "flex-row", "justify-content-between")
+        input.type = "radio";       
     }
-    else if (elem.dataset.questionType === "checkbox") {
-        ["checkbox-input", "d-flex", "flex-row", "justify-content-between"].forEach(c => input_div.classList.add(c));
-        input_div.id = "checkboxElem-" + option_id;
-
+    else if (select_types.value === "checkbox") {
+        input_div.classList.add("checkbox-input", "option", "d-flex", "flex-row", "justify-content-between")
         input.type = "checkbox";
-
-        del_btn.setAttribute("option-div-id", "checkboxElem-" + option_id);
     }
 
     label.appendChild(input);
@@ -173,6 +261,17 @@ function create_option(elem) {
     input_div.appendChild(del_btn);
 
     options_div.appendChild(input_div);
+
+    changes_done.push({
+        table: "options",
+        id: option_id,
+        action: "CREATE",
+        data: {value: "New Option", quest_id: question_id}
+    });
+
+    debounced_save();
+
+    change_saving_msg("Saving...");
 }
 
 document.querySelectorAll(".add-option-btn").forEach(elem => {
@@ -182,94 +281,101 @@ document.querySelectorAll(".add-option-btn").forEach(elem => {
 
 // Change the question's type
 function change_question_type(elem) {
-    const question_id = elem.id.split("types-")[1];
+    const question_id = elem.dataset.id;
     const current_type = elem.getAttribute("current-type");
     const next_type = elem.value;
 
     if (["radio", "checkbox"].includes(current_type) && ["radio", "checkbox"].includes(next_type)) { // change from radio/checkbox to checkbox/radio
         document.querySelectorAll(`input[name='${question_id}']`).forEach(inputElem => {
             inputElem.type = next_type;
+
+            const option_div = inputElem.closest(".option");
+            
+            if (next_type === "radio") {
+                option_div.classList.add("radio-input");
+                option_div.classList.remove("checkbox-input");
+            }
+            else {
+                option_div.classList.add("checkbox-input");
+                option_div.classList.remove("radio-input");
+            }
         });
-
-        const add_opt_btn = document.getElementById("add-opt-btn-" + question_id);
-
-        if (next_type === "radio") {
-            add_opt_btn.dataset.questionType = "radio";
-        }
-        else {
-            add_opt_btn.dataset.questionType = "checkbox";
-        }
     }
     else if (["radio", "checkbox"].includes(current_type) && next_type === "text") { //change from radio/checkbox to text
-        const options = document.getElementById(`options-${question_id}`);
-        const add_opt_btn = document.getElementById(`add-opt-btn-${question_id}`);
-        const new_text_input = `<input class="text-input" id="text-input-${question_id}" type="text" placeholder="Your Answer" disabled>`;
+        const options = document.querySelector(`.options-container[data-id='${question_id}']`);
+        const add_opt_btn = document.querySelector(`.add-option-btn[data-id='${question_id}']`);
+        const new_text_input = `<input class="text-input" data-id="${question_id}" name="text-input" type="text" placeholder="Your Answer" disabled>`;
         
+        options.querySelectorAll(".option").forEach(input => {
+            changes_done.push({
+                table: "options",
+                id: input.dataset.id,
+                action: "DELETE",
+                data: {}
+            });
+        });
+
         options.remove();
         add_opt_btn.remove();
-        elem.parentElement.insertAdjacentHTML('afterend', new_text_input);
+
+        const question_div = elem.closest(".item-container");
+        question_div.insertAdjacentHTML('beforeend', new_text_input);
     }
     else if (current_type === "text" && ["radio", "checkbox"].includes(next_type)) { // change from text to radio/checkbox
         
-        const text_input = document.getElementById(`text-input-${question_id}`);
-        const option_id = crypto.randomUUID();
+        const text_input = document.querySelector(`.text-input[data-id='${question_id}']`);
+        const option_id = uuidv7();
         
         text_input.remove();
 
 
-        const question_div = elem.parentElement.parentElement;
+        const question_div = elem.closest(".item-container")
 
         const options_div = document.createElement("div");
-        options_div.id = "options-" + question_id;
+        options_div.setAttribute("data-id", question_id);
+        options_div.classList.add("options-container");
 
         const input_div = document.createElement("div");
 
         const label = document.createElement("label");
 
         const input = document.createElement("input");
-        input.classList.add("options-input");
+        input.classList.add("options-input", "mx-1");
         input.name = question_id;
         input.value = "New Option";
         input.disabled = true;
 
         const span = document.createElement("span");
+        span.classList.add("ms-1");
         span.contentEditable= true;
         span.innerText = "New Option";
+        span.dataset.id = option_id;
+        span.dataset.table = "options";
+        span.dataset.field = "text";
 
         const del_btn = document.createElement("button");
         del_btn.classList.add("del-option");
-        del_btn.setAttribute("question-id", question_id);
         del_btn.innerText = "Delete";
         del_btn.addEventListener("click", () => delete_option(del_btn));
 
         const add_opt_btn = document.createElement("button");
         add_opt_btn.classList.add("add-option-btn");
-        add_opt_btn.classList.add("radio");
         add_opt_btn.classList.add("mt-3");
-        add_opt_btn.id = "add-opt-btn-" + question_id;
-        add_opt_btn.setAttribute("question-id", question_id);
+        add_opt_btn.dataset.id = question_id;
         add_opt_btn.innerText = "Add Option";
         add_opt_btn.addEventListener("click", () => create_option(add_opt_btn));
 
         if (next_type === "radio") {
-            ["radio-input", "d-flex", "flex-row", "justify-content-between"].forEach(c => input_div.classList.add(c));
-            input_div.id = "radioElem-" + option_id;
+            input_div.classList.add("radio-input", "option", "d-flex", "flex-row", "justify-content-between")
+            input_div.dataset.id = option_id;
 
             input.type = "radio";
-
-            del_btn.setAttribute("option-div-id", "radioElem-" + option_id);
-
-            add_opt_btn.dataset.questionType = "radio";
         }
         else if (next_type === "checkbox") {
-            ["checkbox-input", "d-flex", "flex-row", "justify-content-between"].forEach(c => input_div.classList.add(c));
-            input_div.id = "checkboxElem-" + option_id;
+            input_div.classList.add("checkbox-input", "option", "d-flex", "flex-row", "justify-content-between")
+            input_div.dataset.id = option_id;
 
             input.type = "checkbox";
-
-            del_btn.setAttribute("option-div-id", "checkboxElem-" + option_id);
-
-            add_opt_btn.dataset.questionType = "checkbox";
         }
 
         label.appendChild(input);
@@ -282,9 +388,25 @@ function change_question_type(elem) {
 
         question_div.appendChild(options_div);
         question_div.appendChild(add_opt_btn);
+
+        changes_done.push({
+            table: "options",
+            id: option_id,
+            action: "CREATE",
+            data: {value: "New Option", quest_id: question_id}
+        });
     }
     
     elem.setAttribute("current-type", next_type);
+
+    changes_done.push({
+        table: "questions",
+        id: question_id,
+        action: "UPDATE",
+        data: {type: next_type}
+    });
+
+    send_changes();
 }
 
 document.querySelectorAll(".question-types").forEach(elem => {
@@ -297,56 +419,90 @@ const add_question_btn = document.getElementById("add-question-btn");
 
 add_question_btn.addEventListener("click", () => {
     const questions_container = document.querySelector(".questions-container");
-    const question_id = crypto.randomUUID();
+    const question_id = uuidv7();
+    const order = questions_container.querySelectorAll(".item-container").length + 1;
     
     const new_question_div = `
-    <div class="item-container my-1 question-box" id="question-${question_id}">
-        <button class="del-question-btn mb-2" id="del-question-btn-${question_id}">Delete Question</button>
+    <div class="item-container my-1" data-id="${question_id}" data-order="${order}">
+        <button class="del-question-btn mb-2" data-id="${question_id}">Delete Question</button>
 
-        <div class="question-text mb-2" contenteditable="true" data-placeholder="Question Text">New Question...</div>
+        <label>
+            <input type="checkbox" data-id="{{ question[0] }}" data-table="questions" data-field="required" value="required">
+            <span>Required</span>
+        </label>
+
+        <div class="question-text mb-2" contenteditable="true" data-id="${question_id}" data-table="questions" data-field="text" contenteditable="true" data-placeholder="Question Text">New Question</div>
         
         <div class="mb-2">
-            <label for="types-${question_id}">Type</label>
-            <select class="question-types" name="type" id="types-${question_id}" current-type="text">
-                <option value="text" selected>Text</option>
-                <option value="radio">Multi Option</option>
-                <option value="checkbox">Checkbox</option>
-            </select>
+            <label>
+                <span>Type</span>
+                <select class="question-types" name="type" data-id="${question_id}" current-type="text">
+                    <option value="text" selected>Text</option>
+                    <option value="radio">Multi Option</option>
+                    <option value="checkbox">Checkbox</option>
+                </select>
+            </label>
         </div>
 
-        <input class="text-input" id="text-input-${question_id}" type="text" placeholder="Your Answer" disabled>
+        <input class="text-input" data-id="${question_id}" name="text-input" type="text" placeholder="Your Answer" disabled>
 
         <div class="move-btn-container d-flex flex-column justify-content-center">
-            <button class="up-btn" id="up-btn-${question_id}" data-action="up">Up</button>
-            <button class="down-btn" id="down-btn-${question_id}" data-action="down">Down</button>
+            <button class="up-btn" data-id="${question_id}" data-action="up">Up</button>
+            <button class="down-btn" data-id="${question_id}" data-action="down">Down</button>
         </div>
     </div>
     `;
 
     questions_container.insertAdjacentHTML("beforeend", new_question_div);
 
-    const type_select = document.getElementById("types-" + question_id);
+    const type_select = document.querySelector(`.question-types[data-id='${question_id}']`);
     type_select.addEventListener("input", () => change_question_type(type_select));
 
-    const del_btn = document.getElementById("del-question-btn-" + question_id);
+    const del_btn = document.querySelector(`.del-question-btn[data-id='${question_id}']`);
     del_btn.addEventListener("click", () => delete_question(del_btn));
 
-    const up_btn = document.getElementById("up-btn-" + question_id);
+    const up_btn = document.querySelector(`.up-btn[data-id='${question_id}']`);
     up_btn.addEventListener("click", () => change_question_order(up_btn));
 
-    const down_btn = document.getElementById("down-btn-" + question_id);
+    const down_btn = document.querySelector(`.down-btn[data-id='${question_id}']`);
     down_btn.addEventListener("click", () => change_question_order(down_btn));
+
+    changes_done.push({
+        table: "questions",
+        id: question_id,
+        action: "CREATE",
+        data: {text: "New Question", type: "text", order: order}
+    });
+
+    debounced_save();
+
+    change_saving_msg("Saving...");
 });
 
 
 // Delete question
 function delete_question(elem) {
-    const question_id = elem.id.split("del-question-btn-")[1];
-    const question_div = document.getElementById("question-" + question_id);
+    const question_id = elem.dataset.id;
+    const question_div = document.querySelector(`.item-container[data-id='${question_id}']`);
     const question_number = question_div.parentElement.querySelectorAll(".item-container").length;
     
     if (question_number > 1) {
         question_div.remove();
+
+        const was_created = changes_done.some(item => item.id === question_id && item.action === "CREATE");
+
+        changes_done = changes_done.filter(item => item.id !== question_id);
+
+        if (!was_created) {
+            changes_done.push({
+                table: "questions",
+                id: question_id,
+                action: "DELETE",
+                data: {}
+            });
+        }
+
+        send_changes();
     }
 }
 
@@ -357,20 +513,79 @@ document.querySelectorAll(".del-question-btn").forEach(elem => elem.addEventList
 function change_question_order(elem) {
     const action = elem.dataset.action;
     const question_div = elem.closest(".item-container");
+    const current_ord = parseInt(question_div.dataset.order, 10);
 
+    let ref_question = null;
     if (action == "up") {
-        const previous_quest = question_div.previousElementSibling;
-        if (previous_quest) {
-            previous_quest.before(question_div);
+        ref_question = question_div.previousElementSibling;
+
+        if (ref_question) {
+            ref_question.before(question_div);
+
+            question_div.dataset.order = String(current_ord - 1);
+            ref_question.dataset.order = String(current_ord);
         }
     }
     else if (action == "down") {
-        const next_quest = question_div.nextElementSibling;
-        if (next_quest) {
-            next_quest.after(question_div);
+        ref_question = question_div.nextElementSibling;
+
+        if (ref_question) {
+            ref_question.after(question_div);
+
+            question_div.dataset.order = String(current_ord + 1);
+            ref_question.dataset.order = String(current_ord);
         }
     }
     
+    register_change("questions", question_div.dataset.id, "order", question_div.dataset.order)
+    register_change("questions", ref_question.dataset.id, "order", ref_question.dataset.order)
 }
 
 document.querySelectorAll(".up-btn, .down-btn").forEach(elem => elem.addEventListener("click", () => change_question_order(elem)));
+
+
+// See if the order of every question is correct, correcting when necessary
+function verify_order() {
+    const questions_container = document.querySelector(".questions-container");
+
+    let i = 1
+    questions_container.querySelectorAll(".item-container").forEach(question => {
+        if (question.dataset.order != i) {
+            question.dataset.order = i;
+
+            verify_change_existence("questions", question.dataset.id, "order", i);
+        }
+
+        i++;
+    });
+}
+
+
+// Change the text from the saving message element
+function change_saving_msg(msg) {
+    const elem = document.getElementById("saving-msg");
+
+    elem.innerText = msg;
+}
+
+// Verify if everything is ok to return to homepage
+document.getElementById("logo").addEventListener("click", () => {
+    // Check if form name isn't empty
+    const form_name = document.querySelector(".form-name");
+    
+    if (form_name.innerText === "") {
+        form_name.innerText = "Form";
+        verify_change_existence("forms", form_name.dataset.id, form_name.dataset.field, "Form");
+    }
+
+    // Check if form title isn't empty
+    const form_title = document.querySelector(".form-title");
+    
+    if (form_title.innerText === "") {
+        form_title.innerText = "Form";
+        verify_change_existence("forms", form_title.dataset.id, form_title.dataset.field, "Title");
+    }
+
+    // Save any pending changes
+    send_changes();
+});

@@ -84,15 +84,7 @@
         border-width: 2px;
     }
 }
-/*
-.options-container {
-    width: 80%;
-}
 
-.move-btn-container {
-    width: 20%;
-}
-*/
 div[contenteditable] {
     
     &:focus {
@@ -116,12 +108,4 @@ div[contenteditable] {
     .form-container {
         width: 50%;
     }
-    /*
-    .options-container {
-        width: 90%;
-    }
-
-    .move-btn-container {
-        width: 10%;
-    }*/
 }
