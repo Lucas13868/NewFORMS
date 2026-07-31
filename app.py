@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 import sqlite3
 import os
 
-from helpers import login_required, sql_conn, write_conn, generate_uuid
+from helpers import login_required, read_conn, write_conn, generate_uuid
 
 load_dotenv()
 
@@ -32,7 +32,7 @@ conn.close()
 def index():
     user_id = session["user_id"]
 
-    connection = sql_conn()
+    connection = read_conn()
     cursor = connection.cursor()
 
     cursor.execute("SELECT username FROM users WHERE id = ?", (user_id,))
@@ -118,7 +118,7 @@ def login():
             flash("Missing password!", "error")
             return redirect(url_for("login"))
         
-        connection = sql_conn()
+        connection = read_conn()
         cursor = connection.cursor()
         cursor.execute("SELECT hash, id FROM users WHERE email = ?", (email,))
         user_row = cursor.fetchone()
@@ -147,7 +147,7 @@ def logout():
     return redirect(url_for("login"))   
 
 # Create new form in db
-@app.route("/create-form")
+@app.route("/api/create-form")
 @login_required
 def create_form():
     user_id = session["user_id"]
@@ -188,7 +188,7 @@ def create_form():
         return redirect(url_for("index"))
 
 # Delete form from db
-@app.route("/delete-form", methods=["POST"])
+@app.route("/api/delete-form", methods=["POST"])
 def delete_form():
     form_id = request.form.get("form_id")
     user_id = session["user_id"]
@@ -212,7 +212,7 @@ def delete_form():
 def edit_form(form_id):
     form_id = str(form_id)
 
-    connect = sql_conn()
+    connect = read_conn()
     cursor = connect.cursor()
 
     cursor.execute("SELECT name, title, description FROM forms WHERE id = ? AND user_id = ?", (form_id, session["user_id"]))
@@ -237,7 +237,7 @@ def edit_form(form_id):
 
     connect.close()
 
-    return render_template("form_template.html", form=form, questions=questions, options=options, form_id=form_id)
+    return render_template("form_edit.html", form=form, questions=questions, options=options, form_id=form_id)
 
 # Save changes made in form's edit
 @app.route("/api/save-changes/<uuid:form_id>", methods=['POST'])
@@ -248,7 +248,7 @@ def save_changes(form_id): # save changes from forms in database
     json = request.get_json()
     changes = json.get("changes", [])
     
-    connect = sql_conn()
+    connect = write_conn()
     cursor = connect.cursor()
     
     try:
@@ -258,13 +258,13 @@ def save_changes(form_id): # save changes from forms in database
                 action = item.get("action")
                 uuid = item.get("id")
                 data = item.get("data")
-
+                
                 match table:
                     case "forms":
                         if "form-name" in data:
-                            cursor.execute("UPDATE forms SET name = ? WHERE id = ?", (data.get("form-name"), form_id))
+                            cursor.execute("UPDATE forms SET name = ? WHERE id = ?", (data.get("form-name").strip(), form_id))
                         if "form-title" in data:
-                            cursor.execute("UPDATE forms SET title = ? WHERE id = ?", (data.get("form-title"), form_id))
+                            cursor.execute("UPDATE forms SET title = ? WHERE id = ?", (data.get("form-title").strip(), form_id))
                         if "form-description" in data:
                             cursor.execute("UPDATE forms SET description = ? WHERE id = ?", (data.get("form-description"), form_id))
 
@@ -276,7 +276,7 @@ def save_changes(form_id): # save changes from forms in database
                                 
                             case "UPDATE":
                                 if "text" in data:
-                                    cursor.execute("UPDATE questions SET question_text = ? WHERE id = ?", (data.get("text"), uuid))
+                                    cursor.execute("UPDATE questions SET question_text = ? WHERE id = ?", (data.get("text").strip(), uuid))
                                 if "required" in data:
                                     cursor.execute("UPDATE questions SET required = ? WHERE id = ?", (data.get("required"), uuid))
                                 if "type" in data:
@@ -295,7 +295,7 @@ def save_changes(form_id): # save changes from forms in database
                                 cursor.execute("INSERT INTO options (id, option_text, question_id) VALUES (?, ?, ?)", (uuid, data.get("value"), data.get("quest_id")))
                             case "UPDATE":
                                 if "value" in data:
-                                    cursor.execute("UPDATE options SET option_text = ? WHERE id = ?", (data.get("value"), uuid))
+                                    cursor.execute("UPDATE options SET option_text = ? WHERE id = ?", (data.get("value").strip(), uuid))
                             case "DELETE":
                                 cursor.execute("DELETE FROM options WHERE id = ?", (uuid,))
                             case _:
@@ -309,12 +309,102 @@ def save_changes(form_id): # save changes from forms in database
     
     except Exception as e:
         print(f"Error: {str(e)}")
-
+        
         connect.close()
         
-        return jsonify({"msg": str(e), "status": "error"})
+        return jsonify({"msg": str(e), "status": "error"}), 500
 
+
+# Visualize the form ready to work
+@app.route("/v/<uuid:form_id>")
+def view_form(form_id):
+    form_id = str(form_id)
+
+    connect = read_conn()
+    cursor = connect.cursor()
+
+    cursor.execute("SELECT title, description FROM forms WHERE id = ?", (form_id,))
+    form = cursor.fetchone()
+
+    if not form:
+        print("Form doesn't exist!")
+        connect.close()
+        return redirect(url_for("index"))
+
+    cursor.execute("SELECT id, type, question_text, required FROM questions WHERE form_id = ? ORDER BY quest_order", (form_id,))
+    questions = cursor.fetchall()
+
+    options = {}
+    for q in questions:
+        if q[1] in ["radio", "checkbox"]:
+            cursor.execute("SELECT id, option_text FROM options WHERE question_id = ?", (q[0],))
+            q_opts = cursor.fetchall()
+
+            if q_opts:
+                options[q[0]] = q_opts # Storage each option for a certain question {question_id: [list of options]}
+
+    connect.close()
     
+    return render_template("form_view.html", form=form, questions=questions, options=options, form_id=form_id)
+
+
+# Register the form's response
+@app.route("/submit/<uuid:form_id>", methods=["POST"])
+def register_response(form_id):
+    form_id = str(form_id)
+
+    connect = write_conn()
+    cursor = connect.cursor()
+
+    cursor.execute("SELECT id, type, required FROM questions WHERE form_id = ? ORDER BY quest_order", (form_id,))
+    questions = cursor.fetchall()
+
+    if not questions:
+        print("Form doesn't exist!")
+        connect.close()
+        return redirect(url_for("index"))
+
+    try:
+        with connect:
+            response_id = generate_uuid()
+            cursor.execute("INSERT INTO responses (id, form_id) VALUES (?, ?)", (response_id, form_id))
+            
+            for question in questions:
+                answer = request.form.getlist(question[0])
+
+                # Certify that user didn't changed the values
+                if question[1] in ["radio", "checkbox"]: 
+                    cursor.execute("SELECT option_text FROM options WHERE question_id = ?", (question[0],))
+                    options = cursor.fetchall()
+                    options = [opt[0] for opt in options]
+
+                    answer = [value for value in answer if value in options]
+
+                # Certify that a required question was sended
+                if not answer and question[2]:
+                    raise Exception("Required question missing!")
+
+                for value in answer:
+                    if value != '':
+                        answer_id = generate_uuid()
+                        cursor.execute("INSERT INTO answers (id, answer_text, question_id, response_id) VALUES (?, ?, ?, ?)", (answer_id, value, question[0], response_id))
+
+        cursor.execute("SELECT title FROM forms WHERE id = ?", (form_id,))
+        title = cursor.fetchone()[0]
+
+        connect.close()
+        return render_template("form_submitted.html", form_id=form_id, title=title, msg="Your response has been recorded.")
+
+    except Exception as e:
+        print("Error: " + str(e))
+
+        cursor.execute("SELECT title FROM forms WHERE id = ?", (form_id,))
+        title = cursor.fetchone()[0]
+
+        connect.close()
+        return render_template("form_submitted.html", form_id=form_id, title=title, msg="Something went wrong, try again later!")
+
+
 
 if __name__ == "__main__":
     app.run(debug=True)

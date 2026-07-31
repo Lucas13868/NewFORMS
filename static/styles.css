@@ -85,6 +85,10 @@
     }
 }
 
+form {
+    width: 100%;
+}
+
 div[contenteditable] {
     
     &:focus {

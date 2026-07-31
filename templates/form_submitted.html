@@ -1,0 +1,14 @@
+{% extends "layout.html" %}
+
+{% block head %}{% endblock %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block body %}
+    <div class="form-container mx-auto" data-id="{{ form_id }}">
+        <div class="item-container my-3 d-flex flex-column">
+            <div class="form-title underlined text-center" data-id="{{ form_id }}">{{ title }}</div>
+            <span class="my-2 text-center">{{ msg }}</span>
+            <a class="my-1 text-center" href="/v/{{ form_id }}">Submit another form</a>
+        </div>
+    </div>
+{% endblock %}

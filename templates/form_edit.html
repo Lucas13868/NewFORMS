@@ -20,8 +20,9 @@
                 </div>
                 
                 <div>
-                   <span class="mx-4" id="saving-msg"></span>
-                <button class="save-button" id="save-button">Save</button> 
+                    <span class="mx-1" id="feedback-msg"></span>
+                    <a class="mx-3" id="view" href="/v/{{ form_id }}" target="_blank">View</a>
+                    <button id="copy-clipboard">Copy link</button>
                 </div>
             </div>
         </nav>
@@ -36,7 +37,7 @@
                 {% for question in questions %}
                 <div class="item-container my-1" data-id="{{ question[0] }}" data-order="{{ question[3] }}">
                     <button class="del-question-btn mb-2" data-id="{{ question[0] }}">Delete Question</button>
-
+                    
                     {% if question[4] == False %}
                     <label>
                         <input type="checkbox" data-id="{{ question[0] }}" data-table="questions" data-field="required" value="required">

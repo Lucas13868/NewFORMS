@@ -3,6 +3,13 @@
 {% block title %}NewFORMS{% endblock %}
 
 {% block body %}
+    <nav class="navbar navbar-expand-lg bg-body-tertiary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">NewFORMS</a>
+            <a href="{{ url_for('logout')}}" class="mx-3 nav-link">Logout</a> 
+        </div>
+    </nav>
+
     <div class="container">
         <h1 class="text-center home-title">Welcome, {{ user }}</h1>
         

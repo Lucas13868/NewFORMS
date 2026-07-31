@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+
+<html lang="en">
+    <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
+        <link href="/static/styles.css" rel="stylesheet">
+        <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
+
+        <title>{{ form[0] }}</title>
+    </head>
+    <body>
+        
+        <div class="form-container mx-auto" data-id="{{ form_id }}">
+            <div class="item-container mt-5 mb-3">
+                <div class="form-title underlined" data-id="{{ form_id }}">{{ form[0] }}</div>
+
+                {% if form[1] %}
+                <div class="form-description underlined" data-id="{{ form_id }}">{{ form[1] }}</div>
+                {% endif %}
+            </div>
+
+            <form action="/submit/{{ form_id }}" method="post">
+                <div class="questions-container mb-4">
+                    {% for question in questions %}
+                    <div class="item-container my-1" data-id="{{ question[0] }}">
+                        <div class="question-text mb-2" data-id="{{ question[0] }}">
+                            <span>{{ question[2] }}</span>
+                            {% if question[3] == True %}
+                            <span style="color: red;">*</span>
+                            {% endif %}
+                        </div>
+                        
+                        {% if question[1] == 'text' %}
+                        <input class="text-input" data-id="{{ question[0] }}" name="{{ question[0] }}" type="text" placeholder="Your Answer" data-required="{{ question[3] }}" autocomplete="off">
+
+                        {% elif question[1] == 'radio' %}
+                        <div class="options-container" data-id="{{ question[0] }}">
+                            {% for opt in options[question[0]] %}
+                            <div class="radio-input option" data-id="{{ opt[0] }}">
+                                <label>
+                                    <input class="options-input mx-1" type="{{ question[1] }}" name="{{ question[0] }}" value="{{ opt[1] }}" data-required="{{ question[3] }}">
+                                    <span data-id="{{ opt[0] }}">{{ opt[1] }}</span>
+                                </label>
+                            </div>
+                            
+                            {% endfor %}
+                        </div>
+
+                        {% elif question[1] == 'checkbox' %}
+                        <div class="options-container" data-id="{{ question[0] }}">
+                            {% for opt in options[question[0]] %}
+                            <div class="checkbox-input option d-flex flex-row justify-content-between" data-id="{{ opt[0] }}">
+                                <label>
+                                    <input class="options-input mx-1" type="{{ question[1] }}" data-id="{{ opt[0] }}" name="{{ question[0] }}" value="{{ opt[1] }}" data-required="{{ question[3] }}">
+                                    <span data-id="{{ opt[0] }}">{{ opt[1] }}</span>
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <div class="d-flex justify-content-end">
+                    <input class="mx-3" type="submit" value="Submit">
+                </div>
+                
+            </form>
+        </div>
+        
+    </body>
+
+    <script>
+        document.querySelectorAll("input[data-required='1']").forEach(elem => {
+            elem.required = true;
+        });
+    </script>
+</html>

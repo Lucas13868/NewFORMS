@@ -1,5 +1,7 @@
 import { uuidv7 } from "https://unpkg.com/uuidv7@^1"
 
+const form_id = document.querySelector(".form-container").dataset.id;
+
 // Save form changes
 
 let changes_done = [];
@@ -17,41 +19,28 @@ function send_changes() {
 
     changes_done = [];
 
-    const form_id = document.querySelector(".form-container").dataset.id;
-
     fetch(`/api/save-changes/${form_id}`, { // send form data to backend 
         method: "POST",
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({changes: changes_to_save})
     })
-    .then(res => {
+    .then(async res => {
         if (!res.ok) {
-            throw new Error("Network error");
-            change_saving_msg("Network error! (reloading...)");
-            can_save = false;
-            setTimeout(() => location.reload(), 3000);
+            const error_data = await res.json().catch(() => ({}));
+            throw new Error(error_data.msg || "Unknown server error");
         }
         return res.json();
     })
     .then(data => {
-        if (data.status == "ok") {
-            change_saving_msg(data.msg);
-        }
-        else {
-            change_saving_msg("Error: " + data.msg + " (reloading...)");
-            can_save = false;
-            setTimeout(() => location.reload(), 3000);
-        }
+        change_feedback_msg(data.msg);
     })
     .catch(error => {
-        change_saving_msg('Error: ', error)
+        console.error("Request failed: ", error.message);
+        change_feedback_msg("Something went wrong! (reloading...)");
+        can_save = false;
+        setTimeout(() => location.reload(), 3000);
     })
 }
-
-const save_btn = document.getElementById("save-button");
-
-save_btn.addEventListener('click', () => send_changes());
-
 
 // Sets a debounce and max wait to send changes
 // Send after 2 sec of inactivity or 10 sec of activity
@@ -86,7 +75,7 @@ function register_change(table, id, field, value) {
     
     debounced_save();
 
-    change_saving_msg("Saving...");
+    change_feedback_msg("Saving...");
 }
 
 // Observes changes made in ellements wich the debounce is applied
@@ -271,7 +260,7 @@ function create_option(elem) {
 
     debounced_save();
 
-    change_saving_msg("Saving...");
+    change_feedback_msg("Saving...");
 }
 
 document.querySelectorAll(".add-option-btn").forEach(elem => {
@@ -476,7 +465,7 @@ add_question_btn.addEventListener("click", () => {
 
     debounced_save();
 
-    change_saving_msg("Saving...");
+    change_feedback_msg("Saving...");
 });
 
 
@@ -484,7 +473,7 @@ add_question_btn.addEventListener("click", () => {
 function delete_question(elem) {
     const question_id = elem.dataset.id;
     const question_div = document.querySelector(`.item-container[data-id='${question_id}']`);
-    const question_number = question_div.parentElement.querySelectorAll(".item-container").length;
+    const question_number = question_div.closest(".questions-container").querySelectorAll(".item-container").length;
     
     if (question_number > 1) {
         question_div.remove();
@@ -561,9 +550,9 @@ function verify_order() {
 }
 
 
-// Change the text from the saving message element
-function change_saving_msg(msg) {
-    const elem = document.getElementById("saving-msg");
+// Change the text from the feedback message element
+function change_feedback_msg(msg) {
+    const elem = document.getElementById("feedback-msg");
 
     elem.innerText = msg;
 }
@@ -589,3 +578,58 @@ document.getElementById("logo").addEventListener("click", () => {
     // Save any pending changes
     send_changes();
 });
+
+
+// Copy form link to clipboard
+async function copy_to_clipboard(text) {
+    
+    // Use Clipboard API (for HTTPS or localhost)
+    if (navigator.clipboard && window.isSecureContext) {
+        try {
+            await navigator.clipboard.writeText(text);
+            
+            change_feedback_msg("Link copied!");
+            return true;
+        }
+        catch (err) {
+            console.warn("Couldn't use clipboard API, trying fallback...", err);
+        }
+    }
+    
+    // Fallback (for old browsers or HTTP)
+    const text_area = document.createElement("textarea");
+    text_area.value = text;
+
+    text_area.style.position = "fixed";
+    text_area.style.top = "-9999999px";
+    text_area.style.left = "-9999999px";
+    document.body.appendChild(text_area);
+
+    text_area.focus()
+    text_area.select()
+
+    try {
+        const copied = document.execCommand("copy");
+
+        if (copied) {
+            change_feedback_msg("Link copied!");
+        }
+        else {
+            change_feedback_msg("Unable to copy link!");
+        }
+
+        document.body.removeChild(text_area);
+        return copied;
+
+    } catch (err) {
+        change_feedback_msg("Unable to copy link!");
+        console.warn("Failed to copy link to clipboard", err);
+        
+        document.body.removeChild(text_area);
+        return false;
+    }
+    
+}
+
+
+document.getElementById("copy-clipboard").addEventListener("click", () => copy_to_clipboard(`http://127.0.0.1:5000/v/${form_id}`))

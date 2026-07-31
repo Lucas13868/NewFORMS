@@ -15,7 +15,7 @@ def login_required(f):
     return decorated_function
 
 
-def sql_conn():
+def read_conn():
     conn = sqlite3.connect("database.db", timeout=5.0)
     
     return conn
@@ -26,10 +26,11 @@ def write_conn():
         "database.db",
         isolation_level="IMMEDIATE",
         timeout=10.0,
-        autocommit=False
         )
     
-    conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA foreign_keys = ON;")
+
+    conn.autocommit = False
 
     return conn
 
