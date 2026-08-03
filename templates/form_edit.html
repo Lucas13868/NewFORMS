@@ -13,22 +13,28 @@
     </head>
     <body>
         <nav class="navbar bg-body-tertiary">
-            <div class="container-fluid">
-                <div class="d-flex">
-                    <a class="navbar-brand" id="logo" href="/">NewFORMS</a>
-                    <div class="form-name max-length" data-id="{{ form_id }}" data-table="forms" data-field="form-name" contenteditable="true" data-placeholder="Form Name" data-max="25">{{ form[0] }}</div>
+            <div class="container-fluid d-flex flex-column">
+                <div class="d-flex flex-row justify-content-between align-items-center w-100">
+                    <div class="d-flex align-items-center">
+                        <a class="navbar-brand" id="logo" href="/">NewFORMS</a>
+                        <div class="form-name max-length" data-id="{{ form_id }}" data-table="forms" data-field="form-name" contenteditable="true" data-placeholder="Form Name" data-max="25">{{ form[0] }}</div>
+                    </div>
+                    
+                    <div class="d-flex align-items-center">
+                        <span class="mx-1" id="feedback-msg"></span>
+                        <a class="mx-3" id="view" href="/v/{{ form_id }}" target="_blank">View</a>
+                        <button id="copy-clipboard">Copy link</button>
+                    </div>
                 </div>
-                
                 <div>
-                    <span class="mx-1" id="feedback-msg"></span>
-                    <a class="mx-3" id="view" href="/v/{{ form_id }}" target="_blank">View</a>
-                    <button id="copy-clipboard">Copy link</button>
+                    <a class="mx-1" id="questions-page" href="/e/{{ form_id }}">Questions</a>
+                    <a class="mx-1" id="responses-page" href="/e/{{ form_id }}/responses">Responses</a>
                 </div>
             </div>
         </nav>
 
         <div class="form-container mx-auto" data-id="{{ form_id }}">
-            <div class="item-container mt-5 mb-3">
+            <div class="item-container my-3">
                 <div class="form-title underlined max-length" data-id="{{ form_id }}" data-table="forms" data-field="form-title" contenteditable="true" data-placeholder="Form Title" data-max="100">{{ form[1] }}</div>
                 <div class="form-description underlined" data-id="{{ form_id }}" data-table="forms" data-field="form-description" contenteditable="true" data-placeholder="Form Description">{{ form[2] }}</div>
             </div>
@@ -83,7 +89,7 @@
                         {% for opt in options[question[0]] %}
                         <div class="radio-input option d-flex flex-row justify-content-between" data-id="{{ opt[0] }}">
                             <label>
-                                <input class="options-input mx-1" type="{{ question[1] }}" name="{{ question[0] }}" value="{{ opt[1] }}" disabled>
+                                <input class="options-input mx-1" type="{{ question[1] }}" data-id="{{ opt[0] }}" name="{{ question[0] }}" value="{{ opt[1] }}" disabled>
                                 <span data-id="{{ opt[0] }}" data-table="options" data-field="value" contenteditable="true">{{ opt[1] }}</span>
                             </label>
 

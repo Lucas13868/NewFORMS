@@ -31,8 +31,13 @@
                             <button class="form-btn-div mb-2">
                                 {{ form[0] }}
                             </button>
-                        </form>     
-                        <span class="mb-1">Created at {{ form[2] }}</span>
+                        </form>
+
+                        <div class="mb-1">
+                            <span>Created at </span>
+                            <span class="time-data">{{ form[2] }}</span>
+                        </div>
+                        
                         <form method="post" action="{{ url_for('delete_form') }}">
                             <input type="hidden" value="{{ form[1] }}" name="form_id">
                             <button type="submit">Delete</button>
@@ -47,4 +52,22 @@
         </div>
         
     </div>
+{% endblock %}
+
+{% block script %}
+    <script>
+        // Transform the time data for the user's timezone
+        function convert_timezone(elem) {
+            const default_time = elem.innerText;
+
+            // Ajust time string for format ISO 8601
+            const time_ISO = default_time.replace(" ", "T") + "Z"
+            
+            const local_time = new Date(time_ISO);
+
+            elem.innerText = local_time.toLocaleString();
+        }
+
+        document.querySelectorAll(".time-data").forEach(elem => convert_timezone(elem));
+    </script>
 {% endblock %}

@@ -404,9 +404,7 @@ document.querySelectorAll(".question-types").forEach(elem => {
 
 
 // Create a new question
-const add_question_btn = document.getElementById("add-question-btn");
-
-add_question_btn.addEventListener("click", () => {
+function add_question() {
     const questions_container = document.querySelector(".questions-container");
     const question_id = uuidv7();
     const order = questions_container.querySelectorAll(".item-container").length + 1;
@@ -466,7 +464,12 @@ add_question_btn.addEventListener("click", () => {
     debounced_save();
 
     change_feedback_msg("Saving...");
-});
+}
+
+const add_question_btn = document.getElementById("add-question-btn");
+if (add_question_btn) {
+    add_question_btn.addEventListener("click", () => add_question());
+}
 
 
 // Delete question
@@ -537,16 +540,19 @@ document.querySelectorAll(".up-btn, .down-btn").forEach(elem => elem.addEventLis
 function verify_order() {
     const questions_container = document.querySelector(".questions-container");
 
-    let i = 1
-    questions_container.querySelectorAll(".item-container").forEach(question => {
-        if (question.dataset.order != i) {
-            question.dataset.order = i;
+    if (questions_container) {
+        let i = 1
+        questions_container.querySelectorAll(".item-container").forEach(question => {
+            if (question.dataset.order != i) {
+                question.dataset.order = i;
 
-            verify_change_existence("questions", question.dataset.id, "order", i);
-        }
+                verify_change_existence("questions", question.dataset.id, "order", i);
+            }
 
-        i++;
-    });
+            i++;
+        });
+    }
+    
 }
 
 
@@ -557,8 +563,8 @@ function change_feedback_msg(msg) {
     elem.innerText = msg;
 }
 
-// Verify if everything is ok to return to homepage
-document.getElementById("logo").addEventListener("click", () => {
+// Verify if everything is ok to change page
+document.querySelectorAll("#logo, #responses-page, #questions-page").forEach(elem => elem.addEventListener("click", () => {
     // Check if form name isn't empty
     const form_name = document.querySelector(".form-name");
     
@@ -570,14 +576,14 @@ document.getElementById("logo").addEventListener("click", () => {
     // Check if form title isn't empty
     const form_title = document.querySelector(".form-title");
     
-    if (form_title.innerText === "") {
+    if (form_title && form_title.innerText === "") {
         form_title.innerText = "Form";
         verify_change_existence("forms", form_title.dataset.id, form_title.dataset.field, "Title");
     }
 
     // Save any pending changes
     send_changes();
-});
+}));
 
 
 // Copy form link to clipboard
@@ -631,5 +637,39 @@ async function copy_to_clipboard(text) {
     
 }
 
+const copy_btn = document.getElementById("copy-clipboard");
+if (copy_btn) {
+    copy_btn.addEventListener("click", () => copy_to_clipboard(`http://127.0.0.1:5000/v/${form_id}`));
+}
 
-document.getElementById("copy-clipboard").addEventListener("click", () => copy_to_clipboard(`http://127.0.0.1:5000/v/${form_id}`))
+
+// Transform the time data for the user's timezone
+function convert_timezone(elem) {
+    const default_time = elem.innerText;
+
+    // Ajust time string for format ISO 8601
+    const time_ISO = default_time.replace(" ", "T") + "Z"
+    
+    const local_time = new Date(time_ISO);
+
+    elem.innerText = local_time.toLocaleString();
+}
+
+document.querySelectorAll(".time-data").forEach(elem => convert_timezone(elem));
+
+
+// Change responses view mode
+function change_responses_view(elem) {
+    const individual_div = document.getElementById("individual-resp-container");
+    const summary_div = document.getElementById("summary-resp-container");
+
+    if (elem.id === "summary-btn") {
+        summary_div.hidden = false;
+        individual_div.hidden = true;
+    } else {
+        summary_div.hidden = true;
+        individual_div.hidden = false;
+    }
+}
+
+document.querySelectorAll("#summary-btn, #individual-btn").forEach(elem => elem.addEventListener("click", () => change_responses_view(elem)));

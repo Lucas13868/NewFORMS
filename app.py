@@ -3,8 +3,9 @@ from flask_bcrypt import Bcrypt
 from dotenv import load_dotenv
 import sqlite3
 import os
+from collections import defaultdict
 
-from helpers import login_required, read_conn, write_conn, generate_uuid
+from helpers import login_required, read_conn, write_conn, generate_uuid, get_options
 
 load_dotenv()
 
@@ -32,8 +33,8 @@ conn.close()
 def index():
     user_id = session["user_id"]
 
-    connection = read_conn()
-    cursor = connection.cursor()
+    conn = read_conn()
+    cursor = conn.cursor()
 
     cursor.execute("SELECT username FROM users WHERE id = ?", (user_id,))
     user = cursor.fetchone()[0]
@@ -42,7 +43,7 @@ def index():
     forms = cursor.fetchall()
 
 
-    connection.close()
+    conn.close()
 
     return render_template("home.html", user=user, forms=forms)
 
@@ -72,26 +73,26 @@ def register():
         pwd_hash = bcrypt.generate_password_hash(pwd).decode('utf-8') # encrypt password
         user_id = generate_uuid()
 
-        connection = write_conn()
-        cursor = connection.cursor()
+        conn = write_conn()
+        cursor = conn.cursor()
         
         try:
-            with connection: # Starts transaction
+            with conn: # Starts transaction
                 cursor.execute("INSERT INTO users (id, username, hash, email) VALUES (?, ?, ?, ?)", (user_id, name, pwd_hash, email)) # insert user in db
 
-            connection.close()
+            conn.close()
                 
         except sqlite3.IntegrityError: # if email has already been used, returns an error
             flash("Email already registered!", "error")
 
-            connection.close()
+            conn.close()
             return redirect(url_for("register"))
         
         except Exception as e:
             flash("Something went wrong! Try again later.", "error")
             print(f"Error: {e}")
 
-            connection.close()
+            conn.close()
             return redirect(url_for("register"))
         
 
@@ -118,25 +119,25 @@ def login():
             flash("Missing password!", "error")
             return redirect(url_for("login"))
         
-        connection = read_conn()
-        cursor = connection.cursor()
+        conn = read_conn()
+        cursor = conn.cursor()
         cursor.execute("SELECT hash, id FROM users WHERE email = ?", (email,))
         user_row = cursor.fetchone()
 
         if user_row is None:
             flash("Invalid email and/or password!", "error")
-            connection.close()
+            conn.close()
             return redirect(url_for("login"))
 
         elif not bcrypt.check_password_hash(user_row[0], pwd):
             flash("Invalid email and/or password!", "error")
-            connection.close()
+            conn.close()
             return redirect(url_for("login"))
         
         session["user_id"] = user_row[1]
         session.permanent = True
 
-        connection.close()
+        conn.close()
 
         return redirect(url_for("index"))
 
@@ -152,8 +153,8 @@ def logout():
 def create_form():
     user_id = session["user_id"]
 
-    connect = write_conn()
-    cursor = connect.cursor()
+    conn = write_conn()
+    cursor = conn.cursor()
 
     form_id = generate_uuid()
 
@@ -162,7 +163,7 @@ def create_form():
     checkbox_id = generate_uuid()
 
     try:
-        with connect:
+        with conn:
             cursor.execute("INSERT INTO forms (id, user_id) VALUES (?, ?)", (form_id, user_id))
 
             cursor.execute("INSERT INTO questions (id, form_id, type, question_text, quest_order) VALUES (?, ?, ?, ?, ?)", (text_id, form_id, 'text', 'Text question', 1))
@@ -176,14 +177,14 @@ def create_form():
             for i in range(3):
                 cursor.execute("INSERT INTO options (id, question_id, option_text) VALUES (?, ?, ?)", (generate_uuid(), checkbox_id, f'Option{i + 1}'))
 
-        connect.close()
+        conn.close()
 
         return redirect(f"/e/{form_id}")
 
     except Exception as e:
         print(f"Error during form creation: {e}")
 
-        connect.close()
+        conn.close()
 
         return redirect(url_for("index"))
 
@@ -193,16 +194,16 @@ def delete_form():
     form_id = request.form.get("form_id")
     user_id = session["user_id"]
 
-    connect = write_conn()
-    cursor = connect.cursor()
+    conn = write_conn()
+    cursor = conn.cursor()
 
     try:
-        with connect:
+        with conn:
             cursor.execute("DELETE FROM forms WHERE id = ? AND user_id = ?", (form_id, user_id))
     except Exception as e:
         print("Error while deleting form: ", e)
 
-    connect.close()
+    conn.close()
 
     return redirect(url_for("index"))
 
@@ -212,30 +213,22 @@ def delete_form():
 def edit_form(form_id):
     form_id = str(form_id)
 
-    connect = read_conn()
-    cursor = connect.cursor()
+    conn = read_conn()
+    cursor = conn.cursor()
 
     cursor.execute("SELECT name, title, description FROM forms WHERE id = ? AND user_id = ?", (form_id, session["user_id"]))
     form = cursor.fetchone() # Get form
 
     if not form:
-        connect.close()
+        conn.close()
         return redirect("/")
     
     cursor.execute("SELECT id, type, question_text, quest_order, required FROM questions WHERE form_id = ? ORDER BY quest_order", (form_id,))
     questions = cursor.fetchall() # Get all form questions
 
-    options = {}
-    for q in questions:
-        if q[1] in ["radio", "checkbox"]:
-            cursor.execute("SELECT id, option_text FROM options WHERE question_id = ?", (q[0],))
-            q_opts = cursor.fetchall()
+    options = get_options(questions, cursor)
 
-            if q_opts:
-                options[q[0]] = q_opts # Storage each option for a certain question {question_id: [list of options]}
-    
-
-    connect.close()
+    conn.close()
 
     return render_template("form_edit.html", form=form, questions=questions, options=options, form_id=form_id)
 
@@ -248,11 +241,11 @@ def save_changes(form_id): # save changes from forms in database
     json = request.get_json()
     changes = json.get("changes", [])
     
-    connect = write_conn()
-    cursor = connect.cursor()
+    conn = write_conn()
+    cursor = conn.cursor()
     
     try:
-        with connect:
+        with conn:
             for item in changes:
                 table = item.get("table")
                 action = item.get("action")
@@ -303,14 +296,14 @@ def save_changes(form_id): # save changes from forms in database
                     case _:
                         raise Exception("Table don't exist!")
 
-        connect.close()
+        conn.close()
 
         return jsonify({"msg": "Changes saved!", "status": "ok"})
     
     except Exception as e:
         print(f"Error: {str(e)}")
         
-        connect.close()
+        conn.close()
         
         return jsonify({"msg": str(e), "status": "error"}), 500
 
@@ -320,30 +313,23 @@ def save_changes(form_id): # save changes from forms in database
 def view_form(form_id):
     form_id = str(form_id)
 
-    connect = read_conn()
-    cursor = connect.cursor()
+    conn = read_conn()
+    cursor = conn.cursor()
 
     cursor.execute("SELECT title, description FROM forms WHERE id = ?", (form_id,))
     form = cursor.fetchone()
 
     if not form:
         print("Form doesn't exist!")
-        connect.close()
+        conn.close()
         return redirect(url_for("index"))
 
     cursor.execute("SELECT id, type, question_text, required FROM questions WHERE form_id = ? ORDER BY quest_order", (form_id,))
     questions = cursor.fetchall()
 
-    options = {}
-    for q in questions:
-        if q[1] in ["radio", "checkbox"]:
-            cursor.execute("SELECT id, option_text FROM options WHERE question_id = ?", (q[0],))
-            q_opts = cursor.fetchall()
-
-            if q_opts:
-                options[q[0]] = q_opts # Storage each option for a certain question {question_id: [list of options]}
-
-    connect.close()
+    options = get_options(questions, cursor)
+    
+    conn.close()
     
     return render_template("form_view.html", form=form, questions=questions, options=options, form_id=form_id)
 
@@ -353,19 +339,19 @@ def view_form(form_id):
 def register_response(form_id):
     form_id = str(form_id)
 
-    connect = write_conn()
-    cursor = connect.cursor()
+    conn = write_conn()
+    cursor = conn.cursor()
 
     cursor.execute("SELECT id, type, required FROM questions WHERE form_id = ? ORDER BY quest_order", (form_id,))
     questions = cursor.fetchall()
 
     if not questions:
         print("Form doesn't exist!")
-        connect.close()
+        conn.close()
         return redirect(url_for("index"))
 
     try:
-        with connect:
+        with conn:
             response_id = generate_uuid()
             cursor.execute("INSERT INTO responses (id, form_id) VALUES (?, ?)", (response_id, form_id))
             
@@ -392,7 +378,7 @@ def register_response(form_id):
         cursor.execute("SELECT title FROM forms WHERE id = ?", (form_id,))
         title = cursor.fetchone()[0]
 
-        connect.close()
+        conn.close()
         return render_template("form_submitted.html", form_id=form_id, title=title, msg="Your response has been recorded.")
 
     except Exception as e:
@@ -401,8 +387,110 @@ def register_response(form_id):
         cursor.execute("SELECT title FROM forms WHERE id = ?", (form_id,))
         title = cursor.fetchone()[0]
 
-        connect.close()
+        conn.close()
         return render_template("form_submitted.html", form_id=form_id, title=title, msg="Something went wrong, try again later!")
+
+
+# See the form's individual responses
+@app.route("/e/<uuid:form_id>/responses")
+@login_required
+def form_responses(form_id):
+    form_id = str(form_id)
+
+    conn = read_conn()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT name, title FROM forms WHERE id = ? AND user_id = ?", (form_id, session["user_id"]))
+    form = cursor.fetchone()
+
+    if not form:
+        return redirect("/")
+
+    cursor.execute("SELECT id, created_at FROM responses WHERE form_id = ?", (form_id,))
+    responses = cursor.fetchall()
+
+    resp_number = len(responses)
+
+    cursor.execute("SELECT id, type, question_text, required FROM questions WHERE form_id = ? ORDER BY quest_order", (form_id,))
+    questions = cursor.fetchall()
+
+    options = get_options(questions, cursor)
+
+    # Get all the form's answers (grouped by response_id, question_id and option_id)
+    # answers = {
+    #   response_id1 : {
+    #       question_id1: "asdf",
+    #       question_id2: {
+    #               option_id1: true,
+    #               option_id2: true,
+    #               option_id3: false,
+    #       }
+    #   },
+    #   response_id2 : {
+    #       question_id2: {
+    #               option_id1: false,
+    #               option_id2: true,
+    #               option_id3: false,
+    #       }
+    #   }
+    # }
+
+    answers = {}
+
+    response_ids = [r[0] for r in responses]
+    question_ids = [q[0] for q in questions]
+
+    if response_ids and question_ids:
+
+        # Get all the necessary data with one query
+        placeholders_resp = ','.join('?' for _ in response_ids)
+        placeholders_quest = ','.join('?' for _ in question_ids)
+
+        query = f"""
+            SELECT response_id, question_id, answer_text 
+            FROM answers 
+            WHERE response_id IN ({placeholders_resp})
+            AND question_id IN ({placeholders_quest})
+        """
+        
+        # Executes by passing the union of the two parameter lists.
+        cursor.execute(query, response_ids + question_ids)
+        all_rows = cursor.fetchall()
+
+        # Mapping: (response_id, question_id) -> list of answers from a certain response for a certain answer
+        answers_by_ref = defaultdict(list)
+        for r_id, q_id, ans_text in all_rows:
+            answers_by_ref[(r_id, q_id)].append(ans_text)
+
+        # Maps question types: question_id -> question_type
+        question_types = {q[0]: q[1] for q in questions}
+
+        # Build the answers dictionary
+        for r_id in response_ids:
+            answers[r_id] = {}
+
+            for q_id, q_type in question_types.items():
+                # Get answers for the current response and question
+                opt_answers = answers_by_ref.get((r_id, q_id), [])
+
+                if q_type == "text":
+                    if opt_answers:
+                        answers[r_id][q_id] = opt_answers[0]
+                else:
+                    answers[r_id][q_id] = {}
+                    
+                    # Transform list in "set" for an O(1) search
+                    opt_answers_set = set(opt_answers)
+                    
+                    question_options = options.get(q_id, [])
+                    for option in question_options:
+                        opt_id, opt_val = option[0], option[1]
+                        answers[r_id][q_id][opt_id] = opt_val in opt_answers_set
+
+    
+    conn.close()
+
+    return render_template("form_responses.html", form_id=form_id, form=form, responses=responses, resp_number=resp_number, questions=questions, options=options, answers=answers)
 
 
 
