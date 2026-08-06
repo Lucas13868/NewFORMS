@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect, request, flash, url_for, session, jsonify
+from flask import Flask, render_template, redirect, request, flash, url_for, session, jsonify, Response
 from flask_bcrypt import Bcrypt
 from dotenv import load_dotenv
 import sqlite3
@@ -7,8 +7,10 @@ from collections import defaultdict, Counter
 import pandas as pd
 import plotly.express as px
 import plotly.offline as opy
+from openai import OpenAI
+import json
 
-from helpers import login_required, read_conn, write_conn, generate_uuid, get_options, ask_for_ai_analysis, generate_hash, search_analysis, save_analysis_in_cache
+from helpers import login_required, read_conn, write_conn, generate_uuid, get_options, generate_hash, search_analysis, format_answers_to_md, save_analysis_in_cache
 
 load_dotenv()
 
@@ -23,6 +25,16 @@ app.config.update(
     SESSION_COOKIE_SECURE=False, # require HTTPS (cookie won't be sent in HTTP) # FALSE FOR LOCAL TESTS
     SESSION_COOKIE_SAMESITE="Lax", # protect against CSRF attacks
     PERMANENT_SESSION_LIFETIME=3600 # expire session after 1 hour
+)
+
+# OpenRouter API client configuration
+client = OpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=os.environ.get("OPENROUTER_API_KEY"),
+    default_headers={
+        "HTTP-Referer": "http://127.0.0.1:5000",
+        "X-Title": "newFORMS"
+    }
 )
 
 # Allow db simultaneous write and read
@@ -584,12 +596,23 @@ def form_responses(form_id):
 
 
 # Get the AI analysis for the form's responses
-@app.route("/api/get-ai-analysis/<uuid:form_id>", methods=["POST"])
+@app.route("/api/get-ai-analysis/<uuid:form_id>")
+@login_required
 def get_ai_analysis(form_id):
     form_id = str(form_id)
 
     conn = read_conn()
     cursor = conn.cursor()
+
+    cursor.execute("SELECT id FROM forms WHERE id = ? AND user_id = ?", (form_id, session["user_id"]))
+
+    if not cursor.fetchone():
+        def access_denied():
+            conn.close()
+            payload = json.dumps({"error": "<p>Error: Access denied!</p>"})
+            yield f"data: {payload}\n\n"
+
+        return Response(access_denied(), mimetype="text/event-stream")
 
     cursor.execute("SELECT id FROM responses WHERE form_id = ?", (form_id,))
     responses = cursor.fetchall()
@@ -597,8 +620,12 @@ def get_ai_analysis(form_id):
     resp_number = len(responses)
 
     if resp_number == 0:
-        conn.close()
-        return jsonify({"result": "<p>No responses to analyze.</p>"})
+        def no_responses():
+            conn.close()
+            payload = json.dumps({"text": "<p>No responses to analyze.</p>"})
+            yield f"data: {payload}\n\n"
+
+        return Response(no_responses(), mimetype="text/event-stream")
 
     cursor.execute("SELECT id, type, question_text FROM questions WHERE form_id = ?", (form_id,))
     questions = cursor.fetchall()
@@ -648,24 +675,74 @@ def get_ai_analysis(form_id):
     # Verify is analysis is already in cache with recent data
     data_hash = generate_hash(all_answers)
 
-    html_analysis = search_analysis(data_hash)
+    analysis = search_analysis(form_id)
 
-    if html_analysis:
-        html_analysis = ask_for_ai_analysis(all_answers)
+    # Cache hit
+    if analysis and analysis[0] == data_hash: 
+        def cache_hit():
+            payload = json.dumps({"text": analysis[1]})
+            yield f"data: {payload}\n\n"
 
-        if not save_analysis_in_cache(data_hash, html_analysis):
-            print("Error: Couldn't save analysis in cache.") 
+        return Response(cache_hit(), mimetype="text/event-stream")
 
-        return jsonify({"result": html_analysis})
+    # Cache miss
 
-    return jsonify({"result": html_analysis})
+    def generate_ai_stream():
+        accumulated_analysis = []
+
+        md_data = format_answers_to_md(all_answers)
+        
+        # Prompt that will be sent to AI
+        prompt = f"""
+        You are a data scientist and user experience (UX) expert.
+        Analyze the following consolidated form response report:
+
+        {md_data}
+
+        Your task is to generate a critical analysis. Please:
+        1. Summarize the quantitative data (multiple choice) pointing out clear trends.
+        2. Analyze the sentiments and recurring topics in the text responses.
+        3. Try to cross-reference both pieces of information (e.g., do the textual comments explain or justify the multiple-choice numbers?).
+        4. Make your response as concise as possible while fulfilling the requests above.
+
+        Keep in mind that for questions with checkbox options, users can select more than one answer; therefore, this type of question will generally have more responses than others.
+        You do not need to analyze comments that mention the name of the person responsible for the response.
+        You must respond in the language used in the questions, if it can't be identified, respond in English.
+        Respond strictly structuring your output using simple HTML tags 
+        (such as <p>, <ul>, <li>, <strong>, <h3>) for direct rendering.
+        """
+
+        try:
+            response = client.chat.completions.create(
+                model="openrouter/free",
+                messages=[
+                    {"role": "system", "content": "You are a precise and straight-to-the-point data scientist and user experience (UX) expert."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.3,
+                stream=True
+            )
+
+            for chunk in response:
+                content = chunk.choices[0].delta.content
+                if content:
+                    accumulated_analysis.append(content)
+
+                    payload = json.dumps({"text": content})
+                    yield f"data: {payload}\n\n"
+
+            final_analysis = "".join(accumulated_analysis)
+
+            if not save_analysis_in_cache(form_id, data_hash, final_analysis):
+                print("Error: couldn't save analysis in cache.")
+        
+        except Exception as e:
+            error_payload = json.dumps({"error": f"<p>Error during AI analysis generation: {str(e)}</p>"})
+            yield f"data: {error_payload}\n\n"
     
-
+    return Response(generate_ai_stream(), mimetype="text/event-stream")
 
 
 if __name__ == "__main__":
     app.run(debug=True)
 
-
-# TODO: add AI writing animation
-# TODO: add SQL INDEX where necessary

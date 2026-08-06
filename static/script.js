@@ -646,34 +646,40 @@ if (copy_btn) {
 // **Code for the responses page**
 
 function call_ai() {
-    const ai_status = document.getElementById("ai-status");
-    const ai_content = document.getElementById("ai-content");
-    const ai_switch = document.getElementById("ai-switch-input");
+    const content_elem = document.getElementById("ai-content");
+    const event_source = new EventSource(`/api/get-ai-analysis/${form_id}`);
 
-    if (!ai_switch || !ai_switch.checked) return;
+    let text_buffer = "";
+    event_source.onmessage = function(event) {
+        try {
+            const data = JSON.parse(event.data);
 
-    if (ai_status && ai_content) {
-        fetch(`/api/get-ai-analysis/${form_id}`, {
-            method: "POST"
-        })
-            .then(res => {
-                if (!res.ok) {
-                    throw Error("Couldn't generate AI analysis.");
-                }
-                return res.json()
-            })
-            .then(data => {
-                ai_status.hidden = true;
-                ai_content.innerHTML = data.result;
-            })
-            .catch(error => {
-                console.error("Request failed: ", error);
-                ai_status.innerHTML = "<p>Something went wrong during the analysis request.</p>";
-            });
+            if (data.error) {
+                content_elem.innerHTML = data.error;
+                event_source.close();
+                return;
+            }
+
+            if (data.text) {
+                text_buffer += data.text;
+
+                content_elem.innerHTML = text_buffer;
+            }
+        } catch (e) {
+            console.error("Failed to process AI data: ", e)
+        }
+    };
+
+    event_source.onerror = function() {
+        event_source.close();
     }
 }
 
-document.addEventListener("DOMContentLoaded", () => call_ai());
+document.addEventListener("DOMContentLoaded", () => {
+    if (document.getElementById("ai-switch-input").checked) {
+        call_ai();
+    }
+});
 
 
 // Transform the time data for the user's timezone
@@ -714,11 +720,7 @@ function switch_ai_analysis(elem) {
 
     if (elem.checked) {
         ai_container.hidden = false;
-
-        const ai_content = document.getElementById("ai-content");
-        if (ai_content.innerHTML === "") {
-            call_ai()
-        }
+        call_ai()
         
     } else {
         ai_container.hidden = true;

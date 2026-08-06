@@ -59,26 +59,25 @@
             {% if form[2] %}
             <div class="item-container my-1" id="ai-container">
                 <h5 class="underlined">AI analysis</h5>
-                <div id="ai-status">
+                <div id="ai-status"></div>
+                <div id="ai-content">
                     {% if resp_number == 0 %}
                     <p>No responses to analyze.</p>
                     {% else %}
                     <p>Analyzing data with artificial intelligence, please wait...</p>
                     {% endif %}
                 </div>
-                <div id="ai-content"></div>
             </div>
             {% else %}
             <div class="item-container my-1" id="ai-container" hidden>
                 <h5 class="underlined">AI analysis</h5>
-                <div id="ai-status">
+                <div id="ai-content">
                     {% if resp_number == 0 %}
                     <p>No responses to analyze.</p>
                     {% else %}
                     <p>Analyzing data with artificial intelligence, please wait...</p>
                     {% endif %}
                 </div>
-                <div id="ai-content"></div>
             </div>
             {% endif %}
 

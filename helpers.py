@@ -51,20 +51,27 @@ def write_conn():
 
 
 def generate_uuid():
-    return str(uuid7()) # UUID v7 to avoid database page splitting and index fragmentation 
+    # UUID v7 to avoid database page splitting and index fragmentation 
+    return str(uuid7()) 
 
 
 # Get options for questions
 def get_options(questions, cursor):
-    options = {}
+    questions_ids = [q[0] for q in questions if q[1] in {"radio", "checkbox"}]
+    ids_placeholder = ",".join("?" for _ in questions_ids)
+    options = {q_id: [] for q_id in questions_ids}
 
-    for q in questions:
-        if q[1] in ["radio", "checkbox"]:
-            cursor.execute("SELECT id, option_text FROM options WHERE question_id = ?", (q[0],))
-            q_opts = cursor.fetchall()
+    if questions_ids:
+        query = f"""
+            SELECT id, option_text, question_id FROM options
+            WHERE question_id IN ({ids_placeholder})
+        """
 
-            if q_opts:
-                options[q[0]] = q_opts # Storage each option for a certain question {question_id: [list of options]}
+        cursor.execute(query, questions_ids)
+        all_rows = cursor.fetchall()
+
+        for op_id, op_text, q_id in all_rows:
+            options[q_id].append((op_id, op_text))
 
     return options
 
@@ -77,34 +84,41 @@ def generate_hash(data):
 
 
 # Search if the ai-made analysis is already in cache
-def search_analysis(hash):
+def search_analysis(form_id):
     conn = read_conn()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT html_content FROM analysis_cache WHERE data_hash = ?", (hash,))
+    cursor.execute("SELECT data_hash, html_content FROM analysis_cache WHERE form_id = ?", (form_id,))
     analysis = cursor.fetchone()
 
     conn.close()
 
-    if not analysis:
-        return None
-    else:
-        return analysis[0]
+    return analysis
 
 
 # Save an ai analysis in cache
-def save_analysis_in_cache(hash, html):
+def save_analysis_in_cache(form_id, hash, html):
     conn = write_conn()
     cursor = conn.cursor()
 
     try:
         with conn:
-            cursor.execute("INSERT INTO analysis_cache (data_hash, html_content) VALUES (?, ?)", (hash, html))
+            cursor.execute("""
+                           INSERT INTO analysis_cache 
+                           (form_id, data_hash, html_content) VALUES (?, ?, ?)
+                           ON CONFLICT (form_id) DO UPDATE SET
+                           data_hash = excluded.data_hash,
+                           html_content = excluded.html_content,
+                           update_date = CURRENT_TIMESTAMP;
+                                                                      """, 
+                                                                      (form_id, hash, html)
+                                                                      )
 
         conn.close()
         return True
     
-    except Exception:
+    except Exception as e:
+        print(str(e))
         conn.close()
         return False
 
@@ -136,40 +150,4 @@ def format_answers_to_md(data):
 
     return "\n".join(report)
 
-# Get AI insights from the users' anwers
-def ask_for_ai_analysis(data):
-    md_data = format_answers_to_md(data)
 
-    # Prompt that will be sent to AI
-    prompt = f"""
-    You are a data scientist and user experience (UX) expert.
-    Analyze the following consolidated form response report:
-
-    {md_data}
-
-    Your task is to generate a critical analysis. Please:
-    1. Summarize the quantitative data (multiple choice) pointing out clear trends.
-    2. Analyze the sentiments and recurring topics in the text responses.
-    3. Try to cross-reference both pieces of information (e.g., do the textual comments explain or justify the multiple-choice numbers?).
-    4. Make your response as concise as possible while fulfilling the requests above.
-
-    Keep in mind that for questions with checkbox options, users can select more than one answer; therefore, this type of question will generally have more responses than others.
-    You do not need to analyze comments that mention the name of the person responsible for the response.
-    You must respond in the language used in the questions, if it can't be identified, respond in English.
-    Respond strictly structuring your output using simple HTML tags 
-    (such as <p>, <ul>, <li>, <strong>, <h3>) for direct rendering.
-    """
-
-    try:
-        response = client.chat.completions.create(
-            model="openrouter/free",
-            messages=[
-                {"role": "system", "content": "You are a precise and straight-to-the-point data scientist and user experience (UX) expert."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.3
-        )
-        return response.choices[0].message.content
-    
-    except Exception as e:
-        return f"<p>Error during AI analysis generation: {str(e)}</p>"
