@@ -3,9 +3,12 @@ from flask_bcrypt import Bcrypt
 from dotenv import load_dotenv
 import sqlite3
 import os
-from collections import defaultdict
+from collections import defaultdict, Counter
+import pandas as pd
+import plotly.express as px
+import plotly.offline as opy
 
-from helpers import login_required, read_conn, write_conn, generate_uuid, get_options
+from helpers import login_required, read_conn, write_conn, generate_uuid, get_options, ask_for_ai_analysis, generate_hash, search_analysis, save_analysis_in_cache
 
 load_dotenv()
 
@@ -260,6 +263,8 @@ def save_changes(form_id): # save changes from forms in database
                             cursor.execute("UPDATE forms SET title = ? WHERE id = ?", (data.get("form-title").strip(), form_id))
                         if "form-description" in data:
                             cursor.execute("UPDATE forms SET description = ? WHERE id = ?", (data.get("form-description"), form_id))
+                        if "ai-enabled" in data:
+                            cursor.execute("UPDATE forms SET ai_enabled = ? WHERE id = ?", (data.get("ai-enabled"), form_id))
 
                     case "questions":
                         match action:
@@ -400,10 +405,11 @@ def form_responses(form_id):
     conn = read_conn()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT name, title FROM forms WHERE id = ? AND user_id = ?", (form_id, session["user_id"]))
+    cursor.execute("SELECT name, title, ai_enabled FROM forms WHERE id = ? AND user_id = ?", (form_id, session["user_id"]))
     form = cursor.fetchone()
 
     if not form:
+        conn.close()
         return redirect("/")
 
     cursor.execute("SELECT id, created_at FROM responses WHERE form_id = ?", (form_id,))
@@ -414,6 +420,29 @@ def form_responses(form_id):
     cursor.execute("SELECT id, type, question_text, required FROM questions WHERE form_id = ? ORDER BY quest_order", (form_id,))
     questions = cursor.fetchall()
 
+    text_answers = {}
+    radio_answers = {}
+    checkbox_answers = {}
+
+    for question in questions:
+        if question[1] == "text":
+            text_answers[question[0]] = {
+                "question": question[2],
+                "answers": [],
+                "quantity": 0
+            }
+        elif question[1] == "radio":
+            radio_answers[question[0]] = {
+                "question": question[2],
+                "answers": []
+            }
+        else:
+            checkbox_answers[question[0]] = {
+                "question": question[2],
+                "answers": []
+            }
+
+    
     options = get_options(questions, cursor)
 
     # Get all the form's answers (grouped by response_id, question_id and option_id)
@@ -457,10 +486,23 @@ def form_responses(form_id):
         cursor.execute(query, response_ids + question_ids)
         all_rows = cursor.fetchall()
 
-        # Mapping: (response_id, question_id) -> list of answers from a certain response for a certain answer
         answers_by_ref = defaultdict(list)
         for r_id, q_id, ans_text in all_rows:
+            # Mapping: (response_id, question_id) -> list of answers from a certain response for a certain answer
             answers_by_ref[(r_id, q_id)].append(ans_text)
+            
+            # Getting all answers for text questions
+            if q_id in text_answers:
+                text_answers[q_id]["answers"].append(ans_text)
+                text_answers[q_id]["quantity"] += 1
+
+            # Getting all answers for mult option questions
+            elif q_id in radio_answers:
+                radio_answers[q_id]["answers"].append(ans_text)
+
+            # Getting all answers for checkbox questions
+            else:
+                checkbox_answers[q_id]["answers"].append(ans_text)
 
         # Maps question types: question_id -> question_type
         question_types = {q[0]: q[1] for q in questions}
@@ -487,10 +529,137 @@ def form_responses(form_id):
                         opt_id, opt_val = option[0], option[1]
                         answers[r_id][q_id][opt_id] = opt_val in opt_answers_set
 
-    
     conn.close()
 
-    return render_template("form_responses.html", form_id=form_id, form=form, responses=responses, resp_number=resp_number, questions=questions, options=options, answers=answers)
+    radio_data = {}
+    for q_id, data in radio_answers.items():
+        radio_data[q_id] = {"votes": [], "options": []}
+        count_obj = Counter(data["answers"])
+
+        for value, quantity in count_obj.items():
+            radio_data[q_id]["options"].append(value)
+            radio_data[q_id]["votes"].append(quantity)
+
+    # Making the charts for mult option questions
+    radio_charts = {}
+    for q_id, data in radio_data.items():
+        if data["options"] != []:
+            data_frame = pd.DataFrame(data)
+
+            if len(data["options"]) < 10:
+                fig = px.pie(data_frame, values="votes", names="options")
+                fig.update_traces(textinfo="percent+value")
+            else:
+                fig = px.bar(data_frame, y="votes", x="options")
+
+            chart_div = opy.plot(fig, auto_open=False, output_type="div")
+
+            radio_charts[q_id] = chart_div
+
+
+    checkbox_data = {}
+    for q_id, data in checkbox_answers.items():
+        checkbox_data[q_id] = {"votes": [], "options": []}
+        count_obj = Counter(data["answers"])
+
+        for value, quantity in count_obj.items():
+            checkbox_data[q_id]["options"].append(value)
+            checkbox_data[q_id]["votes"].append(quantity)
+
+    # Making the charts for checkbox questions
+    checkbox_charts = {}
+    for q_id, data in checkbox_data.items():
+        if data["options"] != []:
+            data_frame = pd.DataFrame(data)
+
+            fig = px.bar(data_frame, y="votes", x="options")
+
+            chart_div = opy.plot(fig, auto_open=False, output_type="div")
+
+            checkbox_charts[q_id] = chart_div
+
+
+    return render_template("form_responses.html", form_id=form_id, form=form, responses=responses, resp_number=resp_number, questions=questions, options=options, answers=answers,
+                           text_answers=text_answers, radio_charts=radio_charts, checkbox_charts=checkbox_charts)
+
+
+# Get the AI analysis for the form's responses
+@app.route("/api/get-ai-analysis/<uuid:form_id>", methods=["POST"])
+def get_ai_analysis(form_id):
+    form_id = str(form_id)
+
+    conn = read_conn()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id FROM responses WHERE form_id = ?", (form_id,))
+    responses = cursor.fetchall()
+
+    resp_number = len(responses)
+
+    if resp_number == 0:
+        conn.close()
+        return jsonify({"result": "<p>No responses to analyze.</p>"})
+
+    cursor.execute("SELECT id, type, question_text FROM questions WHERE form_id = ?", (form_id,))
+    questions = cursor.fetchall()
+
+    response_ids = [response[0] for response in responses]
+    question_ids = [question[0] for question in questions]
+
+    all_answers = {}
+
+    option_questions = {}
+
+    for question in questions:
+        if question[1] == "text":
+            all_answers[question[0]] = {"question": question[2], "type": question[1], "answers": []}
+        else:
+            all_answers[question[0]] = {"question": question[2], "type": question[1], "answers": {}}
+            option_questions[question[0]] = []
+
+    if response_ids and question_ids:
+        response_placeholder = ",".join("?" for _ in response_ids)
+        question_placeholder = ",".join("?" for _ in question_ids)
+
+        query = f"""
+            SELECT question_id, answer_text
+            FROM answers 
+            WHERE response_id IN ({response_placeholder})
+            AND question_id IN ({question_placeholder});
+        """
+
+        cursor.execute(query, response_ids + question_ids)
+        all_rows = cursor.fetchall()
+
+        for q_id, ans_text in all_rows:
+            if q_id in all_answers:
+                if all_answers[q_id]["type"] == "text":
+                    all_answers[q_id]["answers"].append(ans_text)
+                else:
+                    option_questions[q_id].append(ans_text)
+
+        
+
+    conn.close()
+
+    for q_id, answers in option_questions.items():
+        all_answers[q_id]["answers"] = Counter(answers)
+
+    # Verify is analysis is already in cache with recent data
+    data_hash = generate_hash(all_answers)
+
+    html_analysis = search_analysis(data_hash)
+
+    if html_analysis:
+        html_analysis = ask_for_ai_analysis(all_answers)
+
+        if not save_analysis_in_cache(data_hash, html_analysis):
+            print("Error: Couldn't save analysis in cache.") 
+
+        return jsonify({"result": html_analysis})
+
+    return jsonify({"result": html_analysis})
+    
 
 
 
@@ -498,3 +667,5 @@ if __name__ == "__main__":
     app.run(debug=True)
 
 
+# TODO: add AI writing animation
+# TODO: add SQL INDEX where necessary

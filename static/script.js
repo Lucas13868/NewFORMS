@@ -19,7 +19,7 @@ function send_changes() {
 
     changes_done = [];
 
-    fetch(`/api/save-changes/${form_id}`, { // send form data to backend 
+    fetch(`/api/save-changes/${form_id}`, {
         method: "POST",
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({changes: changes_to_save})
@@ -39,7 +39,7 @@ function send_changes() {
         change_feedback_msg("Something went wrong! (reloading...)");
         can_save = false;
         setTimeout(() => location.reload(), 3000);
-    })
+    });
 }
 
 // Sets a debounce and max wait to send changes
@@ -643,6 +643,39 @@ if (copy_btn) {
 }
 
 
+// **Code for the responses page**
+
+function call_ai() {
+    const ai_status = document.getElementById("ai-status");
+    const ai_content = document.getElementById("ai-content");
+    const ai_switch = document.getElementById("ai-switch-input");
+
+    if (!ai_switch || !ai_switch.checked) return;
+
+    if (ai_status && ai_content) {
+        fetch(`/api/get-ai-analysis/${form_id}`, {
+            method: "POST"
+        })
+            .then(res => {
+                if (!res.ok) {
+                    throw Error("Couldn't generate AI analysis.");
+                }
+                return res.json()
+            })
+            .then(data => {
+                ai_status.hidden = true;
+                ai_content.innerHTML = data.result;
+            })
+            .catch(error => {
+                console.error("Request failed: ", error);
+                ai_status.innerHTML = "<p>Something went wrong during the analysis request.</p>";
+            });
+    }
+}
+
+document.addEventListener("DOMContentLoaded", () => call_ai());
+
+
 // Transform the time data for the user's timezone
 function convert_timezone(elem) {
     const default_time = elem.innerText;
@@ -673,3 +706,26 @@ function change_responses_view(elem) {
 }
 
 document.querySelectorAll("#summary-btn, #individual-btn").forEach(elem => elem.addEventListener("click", () => change_responses_view(elem)));
+
+
+// Enable or disable ai analysis
+function switch_ai_analysis(elem) {
+    const ai_container = document.getElementById("ai-container");
+
+    if (elem.checked) {
+        ai_container.hidden = false;
+
+        const ai_content = document.getElementById("ai-content");
+        if (ai_content.innerHTML === "") {
+            call_ai()
+        }
+        
+    } else {
+        ai_container.hidden = true;
+    }
+}
+
+const ai_switch = document.getElementById("ai-switch-input");
+if (ai_switch) {
+    ai_switch.addEventListener("input", () => switch_ai_analysis(ai_switch));
+}

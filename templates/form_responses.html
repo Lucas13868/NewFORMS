@@ -41,6 +41,14 @@
                 <h2>{{ resp_number }} responses</h2>
                 {% endif %}
             </div>
+            <div id="ai-switch">
+                <label for="ai-switch-input">Enable AI analysis</label>
+                {% if form[2] %}
+                <input id="ai-switch-input" type="checkbox" data-id="{{ form_id }}" data-table="forms" data-field="ai-enabled" checked>
+                {% else %}
+                <input id="ai-switch-input" type="checkbox" data-id="{{ form_id }}" data-table="forms" data-field="ai-enabled">
+                {% endif %}
+            </div>
             <div class="d-flex justify-content-center">
                 <button class="mx-1" id="summary-btn">Summary</button>
                 <button class="mx-1" id="individual-btn">Individual</button>
@@ -48,10 +56,78 @@
         </div>
 
         <div class="w-100" id="summary-resp-container">
-            Summary!
+            {% if form[2] %}
+            <div class="item-container my-1" id="ai-container">
+                <h5 class="underlined">AI analysis</h5>
+                <div id="ai-status">
+                    {% if resp_number == 0 %}
+                    <p>No responses to analyze.</p>
+                    {% else %}
+                    <p>Analyzing data with artificial intelligence, please wait...</p>
+                    {% endif %}
+                </div>
+                <div id="ai-content"></div>
+            </div>
+            {% else %}
+            <div class="item-container my-1" id="ai-container" hidden>
+                <h5 class="underlined">AI analysis</h5>
+                <div id="ai-status">
+                    {% if resp_number == 0 %}
+                    <p>No responses to analyze.</p>
+                    {% else %}
+                    <p>Analyzing data with artificial intelligence, please wait...</p>
+                    {% endif %}
+                </div>
+                <div id="ai-content"></div>
+            </div>
+            {% endif %}
+
+            {% for question in questions %}
+            <div class="item-container my-1">
+                <div class="question-text mb-2">{{ question[2] }}</div>
+
+                {% if question[1] == "text" %}
+                <div class="text-answers-list">
+                    {% if text_answers[question[0]]["quantity"] > 0 %}
+                    <ul>
+                        {% for answer in text_answers[question[0]]["answers"] %}
+                        <li>{{ answer }}</li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <span>No answers for this question.</span>
+                    {% endif %}
+                </div>
+
+                {% elif question[1] == "radio" %}
+                    {% if radio_charts[question[0]] %}
+                    <div class="chart-div" style="height: 300px;">
+                        {{ radio_charts[question[0]] | safe }}
+                    </div>
+                    {% else %}
+                    <span>No answers for this question.</span>
+                    {% endif %}
+
+                {% else %}
+                    {% if checkbox_charts[question[0]] %}
+                    <div class="chart-div" style="height: 300px;">
+                        {{ checkbox_charts[question[0]] | safe }}
+                    </div>
+                    {% else %}
+                    <span>No answers for this question.</span>
+                    {% endif %}
+                {% endif %}
+            </div>
+            {% endfor %}
         </div>
 
         <div class="w-100" id="individual-resp-container" hidden>
+            {% if resp_number == 0 %}
+            <div class="item-container my-1">
+                <h4>No responses to visualize.</h3>
+            </div>
+            {% endif %}
+
             {% for response in responses %}
             <div>
                 <span>Submitted on </span>
